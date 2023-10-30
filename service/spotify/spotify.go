@@ -1,3 +1,4 @@
+// the spotify package deals with interaction with the Spotify api
 package spotify
 
 import (
