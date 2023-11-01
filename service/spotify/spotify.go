@@ -91,7 +91,7 @@ func (spot *API) validateToken() (bool, error) {
 }
 
 // Create and return a new pre-authenticated SpotifyAPI instance.
-func NewSpotifyAPI(client_id, client_secret string) (*API, error) {
+func NewAPI(client_id, client_secret string) (*API, error) {
 	spot := API{}
 
 	spot.auth.client_id = client_id
@@ -139,19 +139,19 @@ func (spot *API) getHelper(uri string, decodeTo any) error {
 
 // helper function for retrieving a resource from the Spotify API
 // resourceType should be one of: "track", "album", "artist"
-func (spot *API) getResource(resourceType string, iden Identifier) (db.Resource, error) {
-	var resource db.Resource
+func (spot *API) getResource(resourceType string, iden identifier) (any, error) {
+	var resource any
 
-	if iden.SpotifyID != "" {
+	if iden.spotifyId != "" {
 		// spotify id of track present
-		err := spot.getHelper(endpointTrack+iden.SpotifyID, &resource)
+		err := spot.getHelper(endpointTrack+iden.spotifyId, &resource)
 		if err != nil {
 			return nil, err
 		}
 	} else {
-		var searchResults Search
+		var searchResults search
 		searchQuery := url.Values{
-			"q":     {url.QueryEscape(iden.Artist + " - " + iden.Title)},
+			"q":     {url.QueryEscape(iden.artist + " - " + iden.title)},
 			"limit": {"1"},
 			"type":  {resourceType},
 		}.Encode()
@@ -186,7 +186,7 @@ func (spot *API) getResource(resourceType string, iden Identifier) (db.Resource,
 	return resource, nil
 }
 
-func (spot *API) GetTrack(iden Identifier) (*db.Track, error) {
+func (spot *API) GetTrack(iden identifier) (*db.Track, error) {
 	resource, err := spot.getResource("track", iden)
 	if err != nil {
 		return nil, err
@@ -195,7 +195,7 @@ func (spot *API) GetTrack(iden Identifier) (*db.Track, error) {
 	return resource.(*db.Track), nil
 }
 
-func (spot *API) GetAlbum(iden Identifier) (*db.Album, error) {
+func (spot *API) GetAlbum(iden identifier) (*db.Album, error) {
 	resource, err := spot.getResource("album", iden)
 	if err != nil {
 		return nil, err
@@ -204,7 +204,7 @@ func (spot *API) GetAlbum(iden Identifier) (*db.Album, error) {
 	return resource.(*db.Album), nil
 }
 
-func (spot *API) GetArtist(iden Identifier) (*db.Artist, error) {
+func (spot *API) GetArtist(iden identifier) (*db.Artist, error) {
 	resource, err := spot.getResource("artist", iden)
 	if err != nil {
 		return nil, err
@@ -213,49 +213,15 @@ func (spot *API) GetArtist(iden Identifier) (*db.Artist, error) {
 	return resource.(*db.Artist), nil
 }
 
-// passed to api functions when a resource is requested from Spotify's API
-type Identifier struct {
-	SpotifyID string
-	Title     string
-	Artist    string
+// identify a spotify resource by titl+artist or by unique Id
+type identifier struct {
+	spotifyId string
+	title     string
+	artist    string
 }
 
 type apiAccessToken struct {
 	Access_token string `json:"access_token"`
 	Token_type   string `json:"token_type"`
 	Expires_in   int    `json:"expires_in"`
-}
-
-// a spotify resource (track, artist, album) that is able to be
-// preserved in a database for later use
-
-type Search struct {
-	Tracks struct {
-		Items []db.Track
-
-		Href   string `json:"href"`
-		Next   string `json:"next"`
-		Offset int    `json:"offset"`
-		Limit  int    `json:"limit"`
-		Total  int    `json:"total"`
-	}
-
-	Artists struct {
-		Items []db.Artist
-
-		Href   string `json:"href"`
-		Next   string `json:"next"`
-		Offset int    `json:"offset"`
-		Limit  int    `json:"limit"`
-		Total  int    `json:"total"`
-	}
-
-	Albums struct {
-		Items []db.Album
-
-		Href   string `json:"href"`
-		Next   string `json:"next"`
-		Offset int    `json:"offset"`
-		Limit  int    `json:"limit"`
-	}
 }

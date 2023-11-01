@@ -8,7 +8,7 @@ import (
 )
 
 func main() {
-	spot, err := spotify.NewSpotifyAPI(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_SECRET"))
+	spot, err := spotify.NewAPI(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_SECRET"))
 	if err != nil {
 		log.Fatal(err)
 	}
