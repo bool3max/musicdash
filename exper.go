@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bool3max/musicdash/db"
 	"bool3max/musicdash/service/spotify"
 	"fmt"
 	"log"
@@ -8,17 +9,14 @@ import (
 )
 
 func main() {
-	spot, err := spotify.NewAPI(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_SECRET"))
+	var provider db.ResourceProvider
+	provider, err := spotify.NewAPI(os.Getenv("SPOTIFY_CLIENT_ID"), os.Getenv("SPOTIFY_SECRET"))
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	track, err := spot.GetTrack(spotify.Identifier{Title: "90210", Artist: "travis scott"})
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	fmt.Print(track)
+	travis, _ := provider.GetTrackByMatch(db.ResourceIdentifier{Artist: "travis scott", Title: "90210"})
+	fmt.Printf("%+v, %v", travis.Artists, len(travis.Artists))
 
 	// plays, err := lastfm.GetAllPlays(os.Getenv("LASTFM_API_KEY"), "deadaptation")
 	// if err != nil {

@@ -11,39 +11,33 @@ const (
 type AlbumType int
 
 type Track struct {
-	Title        string
-	Duration     time.Duration
-	TracklistNum int
-	Album        Album
-	Artists      []Artist
-	Spotify      struct {
-		Id         string
-		URI        string
-		Popularity int
-	}
+	Title             string
+	Duration          time.Duration
+	TracklistNum      int
+	Album             Album
+	Artists           []Artist
+	SpotifyId         string
+	SpotifyURI        string
+	SpotifyPopularity int
 }
 
 type Artist struct {
-	Name        string
-	Discography []Album
-	Spotify     struct {
-		Id            string
-		URI           string
-		FollowerCount int
-	}
+	Name                 string
+	Discography          []Album
+	SpotifyId            string
+	SpotifyURI           string
+	SpotifyFollowerCount int
 }
 
 type Album struct {
-	Title       string
-	CountTracks int
-	Artists     []Artist
-	Tracks      []Track
-	ReleaseDate time.Time
-	Spotify     struct {
-		Id        string
-		URI       string
-		AlbumType AlbumType
-	}
+	Title            string
+	CountTracks      int
+	Artists          []Artist
+	Tracks           []Track
+	ReleaseDate      time.Time
+	SpotifyId        string
+	SpotifyURI       string
+	SpotifyAlbumType AlbumType
 }
 
 // used to search for an artist, album, or track by name
@@ -52,10 +46,10 @@ type ResourceIdentifier struct {
 }
 
 type ResourceProvider interface {
-	GetTrackById(string) Track
-	GetTrackByMatch(ResourceIdentifier) Track
-	GetAlbumById(string) Album
-	GetAlbumByMatch(ResourceIdentifier) Album
-	GetArtistById(string) Artist
-	GetArtistByMatch(ResourceIdentifier) Artist
+	GetTrackById(string) (*Track, error)
+	GetTrackByMatch(ResourceIdentifier) (*Track, error)
+	GetAlbumById(string) (*Album, error)
+	GetAlbumByMatch(ResourceIdentifier) (*Album, error)
+	GetArtistById(string) (*Artist, error)
+	GetArtistByMatch(ResourceIdentifier) (*Artist, error)
 }
