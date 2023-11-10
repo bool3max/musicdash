@@ -8,6 +8,8 @@ import (
 // objects returned by the spotify API that are eventually converted to "real" application
 // objects used throughout
 
+// a resource returned by the Spotify API that can be converted
+// into a "real" database resource
 type track struct {
 	Id         string
 	Name       string
@@ -22,13 +24,18 @@ type track struct {
 
 func (track track) toDB() db.Track {
 	dbArtists := make([]db.Artist, len(track.Artists))
-	for _, spotifyArtist := range track.Artists {
-		dbArtists = append(dbArtists, spotifyArtist.toDB())
+	for idx, spotifyArtist := range track.Artists {
+		dbArtists[idx] = spotifyArtist.toDB()
 	}
 
+	// the duration over the api arrives as an integer representing
+	// the duration of the track in milliseconds. in order to parse
+	// this to a time.Duration type, i had to convert the duration
+	// number to a string and append "ms" to the end to know
+	// so ParseDuration knows the unit of time
 	return db.Track{
 		Title:             track.Name,
-		Duration:          time.Duration(track.DurationMS),
+		Duration:          time.Duration(track.DurationMS * 1e6),
 		TracklistNum:      track.TrackNum,
 		Album:             track.Album.toDB(),
 		Artists:           dbArtists,
@@ -63,7 +70,7 @@ type album struct {
 	CountTracks int    `json:"total_tracks"`
 	Id          string
 	Name        string
-	ReleaseDate string
+	ReleaseDate string `json:"release_date"`
 	Artists     []artist
 	Tracks      struct {
 		Items []track
@@ -76,15 +83,15 @@ func (album album) toDB() db.Album {
 	dbArtists := make([]db.Artist, len(album.Artists))
 	dbTracks := make([]db.Track, len(album.Tracks.Items))
 
-	for _, spotifyArtist := range album.Artists {
-		dbArtists = append(dbArtists, spotifyArtist.toDB())
+	for idx, spotifyArtist := range album.Artists {
+		dbArtists[idx] = spotifyArtist.toDB()
 	}
 
-	for _, spotifyTrack := range album.Tracks.Items {
-		dbTracks = append(dbTracks, spotifyTrack.toDB())
+	for idx, spotifyTrack := range album.Tracks.Items {
+		dbTracks[idx] = spotifyTrack.toDB()
 	}
 
-	releaseDate, _ := time.Parse("2023-10-09", album.ReleaseDate)
+	releaseDate, _ := time.Parse(time.DateOnly, album.ReleaseDate)
 	var albumType db.AlbumType
 	switch album.Type {
 	case "album":

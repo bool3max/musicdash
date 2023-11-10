@@ -15,7 +15,7 @@ import (
 
 const (
 	endpointTrack  = "https://api.spotify.com/v1/tracks/"
-	endpointArtist = "https://api.spotify.com/v1/artist/"
+	endpointArtist = "https://api.spotify.com/v1/artists/"
 	endpointAlbum  = "https://api.spotify.com/v1/albums/"
 	endpointSearch = "https://api.spotify.com/v1/search/"
 )
@@ -140,16 +140,47 @@ func (spot *api) getHelper(uri string, decodeTo any) error {
 // helper function for retrieving a resource from the Spotify API
 // resourceType should be one of: "track", "album", "artist"
 func (spot *api) getResource(resourceType string, iden identifier) (any, error) {
-	var resource any
 
 	if iden.spotifyId != "" {
-		// spotify id of track present
-		err := spot.getHelper(endpointTrack+iden.spotifyId, &resource)
-		if err != nil {
+		// spotify id of desired resource present, use a resource-specific
+		// endpoint
+		var endpoint string
+		switch resourceType {
+		case "track":
+			endpoint = endpointTrack
+		case "album":
+			endpoint = endpointAlbum
+		case "artist":
+			endpoint = endpointArtist
+		}
+
+		var resourcePtr any
+		switch resourceType {
+		case "track":
+			resourcePtr = &track{}
+		case "artist":
+			resourcePtr = &artist{}
+		case "album":
+			resourcePtr = &album{}
+		}
+		if err := spot.getHelper(endpoint+iden.spotifyId, resourcePtr); err != nil {
 			return nil, err
 		}
+
+		switch t := resourcePtr.(type) {
+		case *track:
+			return t.toDB(), nil
+		case *artist:
+			return t.toDB(), nil
+		case *album:
+			return t.toDB(), nil
+		default:
+			return nil, errors.New("invalid resource type")
+		}
+
 	} else {
 		var searchResults search
+		var resource any
 		searchQuery := url.Values{
 			"q":     {url.QueryEscape(iden.artist + " " + iden.title)},
 			"limit": {"1"},
@@ -181,9 +212,8 @@ func (spot *api) getResource(resourceType string, iden identifier) (any, error) 
 			return nil, fmt.Errorf("unknown resource type: %v", resourceType)
 		}
 
+		return resource, nil
 	}
-
-	return resource, nil
 }
 
 func (spot *api) GetTrackById(id string) (*db.Track, error) {
