@@ -28,7 +28,7 @@ func main() {
 	// 	fmt.Printf("%v -- {%v}\n", track.Title, track.Duration)
 	// }
 
-	drake := db.Artist{
+	drake := db.Track{
 		SpotifyId: "1234abcd",
 	}
 
@@ -43,9 +43,9 @@ func main() {
 	}
 
 	if preserved {
-		fmt.Println("DRAKE IN DATABASE")
+		fmt.Println("track IN DATABASE")
 	} else {
-		fmt.Println("DRAKE NOT IN DATABASE")
+		fmt.Println("track NOT IN DATABASE")
 	}
 
 	// plays, err := lastfm.GetAllPlays(os.Getenv("LASTFM_API_KEY"), "deadaptation")

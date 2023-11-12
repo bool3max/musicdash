@@ -6,7 +6,7 @@ import (
 )
 
 // objects returned by the spotify API that are eventually converted to "real" application
-// objects used throughout
+// objects used throughout the application
 
 // a resource returned by the Spotify API that can be converted
 // into a "real" database resource
@@ -28,11 +28,6 @@ func (track track) toDB() db.Track {
 		dbArtists[idx] = spotifyArtist.toDB()
 	}
 
-	// the duration over the api arrives as an integer representing
-	// the duration of the track in milliseconds. in order to parse
-	// this to a time.Duration type, i had to convert the duration
-	// number to a string and append "ms" to the end to know
-	// so ParseDuration knows the unit of time
 	return db.Track{
 		Title:             track.Name,
 		Duration:          time.Duration(track.DurationMS * 1e6),

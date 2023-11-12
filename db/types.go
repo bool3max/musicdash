@@ -8,18 +8,18 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+type AlbumType int
+
 const (
 	RegularAlbum AlbumType = iota
 	Compilation
 	Single
 )
 
-type AlbumType int
-
 type Resource interface {
 	// check if the corresponding resource is preserved
 	// in the local database
-	isPreserved() (bool, error)
+	IsPreserved() (bool, error)
 }
 
 type Track struct {
@@ -33,9 +33,21 @@ type Track struct {
 	SpotifyPopularity int
 }
 
-// func (track *Track) isPreserved(pool *pgxpool.Pool) (bool, error) {
-// 	return false, nil
-// }
+func (track *Track) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+	row := pool.QueryRow(ctx, "select spotifyid from spotify_track where spotifyid=$1", track.SpotifyId)
+
+	var id string
+	err := row.Scan(&id)
+
+	switch err {
+	case pgx.ErrNoRows:
+		return false, nil
+	case nil:
+		return true, nil
+	default:
+		return false, err
+	}
+}
 
 type Artist struct {
 	Name                 string
@@ -47,15 +59,22 @@ type Artist struct {
 
 func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	row := pool.QueryRow(ctx, "select spotifyid from spotify_artist where spotifyid=$1", artist.SpotifyId)
+
 	var id string
 	err := row.Scan(&id)
-	if err == pgx.ErrNoRows {
+
+	switch err {
+	case pgx.ErrNoRows:
 		return false, nil
-	} else if err == nil {
+	case nil:
 		return true, nil
-	} else {
+	default:
 		return false, err
 	}
+}
+
+func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool) error {
+	return nil
 }
 
 type Album struct {
@@ -67,6 +86,22 @@ type Album struct {
 	SpotifyId        string
 	SpotifyURI       string
 	SpotifyAlbumType AlbumType
+}
+
+func (album *Album) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+	row := pool.QueryRow(ctx, "select spotifyid from spotify_album where spotifyid=$1", album.SpotifyId)
+
+	var id string
+	err := row.Scan(&id)
+
+	switch err {
+	case pgx.ErrNoRows:
+		return false, nil
+	case nil:
+		return true, nil
+	default:
+		return false, err
+	}
 }
 
 // used to search for an artist, album, or track by name
