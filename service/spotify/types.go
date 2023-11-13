@@ -114,7 +114,20 @@ type image struct {
 	Url           string
 }
 
-type search struct {
+// albums, tracks, and artist returned via Search() usually contain
+// less information that proper counterparts returned via
+// .Get<Resource>By<IdentityType>
+// Search() should be used when a non-specific resource is being looked for,
+// or when an ID of a specific resoure is required in order to obtain its
+// full version
+type Search struct {
+	Albums  []db.Album
+	Tracks  []db.Track
+	Artists []db.Artist
+}
+
+// API response struct for the Spotify /search endpoint
+type searchResponse struct {
 	Tracks struct {
 		Items []track
 

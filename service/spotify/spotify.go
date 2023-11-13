@@ -5,10 +5,10 @@ import (
 	"bool3max/musicdash/db"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -138,86 +138,79 @@ func (spot *api) getHelper(uri string, decodeTo any) error {
 }
 
 // helper function for retrieving a resource from the Spotify API
-// resourceType should be one of: "track", "album", "artist"
-func (spot *api) getResource(resourceType string, iden identifier) (any, error) {
+// based on its spotify ID. resourceType should be one of:
+// "track", "album", "artist"
+func (spot *api) getResource(resourceType, spotifyId string) (any, error) {
 
-	if iden.spotifyId != "" {
-		// spotify id of desired resource present, use a resource-specific
-		// endpoint
-		var endpoint string
-		switch resourceType {
-		case "track":
-			endpoint = endpointTrack
-		case "album":
-			endpoint = endpointAlbum
-		case "artist":
-			endpoint = endpointArtist
-		}
+	// determine which endpoint url to use based on type of desired resource
+	var endpoint string
+	switch resourceType {
+	case "track":
+		endpoint = endpointTrack
+	case "album":
+		endpoint = endpointAlbum
+	case "artist":
+		endpoint = endpointArtist
+	}
 
-		var resourcePtr any
-		switch resourceType {
-		case "track":
-			resourcePtr = &track{}
-		case "artist":
-			resourcePtr = &artist{}
-		case "album":
-			resourcePtr = &album{}
-		}
-		if err := spot.getHelper(endpoint+iden.spotifyId, resourcePtr); err != nil {
-			return nil, err
-		}
+	var resourcePtr any
+	switch resourceType {
+	case "track":
+		resourcePtr = &track{}
+	case "artist":
+		resourcePtr = &artist{}
+	case "album":
+		resourcePtr = &album{}
+	}
 
-		switch t := resourcePtr.(type) {
-		case *track:
-			return t.toDB(), nil
-		case *artist:
-			return t.toDB(), nil
-		case *album:
-			return t.toDB(), nil
-		default:
-			return nil, errors.New("invalid resource type")
-		}
+	if err := spot.getHelper(endpoint+spotifyId, resourcePtr); err != nil {
+		return nil, err
+	}
 
-	} else {
-		var searchResults search
-		var resource any
-		searchQuery := url.Values{
-			"q":     {url.QueryEscape(iden.artist + " " + iden.title)},
-			"limit": {"1"},
-			"type":  {resourceType},
-		}.Encode()
-		err := spot.getHelper(endpointSearch+"?"+searchQuery, &searchResults)
-		if err != nil {
-			return nil, err
-		}
-
-		switch resourceType {
-		case "track":
-			if len(searchResults.Tracks.Items) < 1 {
-				return nil, fmt.Errorf("no rersource found for %v", iden)
-			}
-			resource = searchResults.Tracks.Items[0].toDB()
-		case "artist":
-			if len(searchResults.Artists.Items) < 1 {
-				return nil, fmt.Errorf("no rersource found for %v", iden)
-			}
-
-			resource = searchResults.Artists.Items[0].toDB()
-		case "album":
-			if len(searchResults.Albums.Items) < 1 {
-				return nil, fmt.Errorf("no rersource found for %v", iden)
-			}
-			resource = searchResults.Albums.Items[0].toDB()
-		default:
-			return nil, fmt.Errorf("unknown resource type: %v", resourceType)
-		}
-
-		return resource, nil
+	switch t := resourcePtr.(type) {
+	case *track:
+		return t.toDB(), nil
+	case *artist:
+		return t.toDB(), nil
+	case *album:
+		return t.toDB(), nil
+	default:
+		return nil, errors.New("invalid resource type")
 	}
 }
 
+func (spot *api) Search(query string, limit uint) (Search, error) {
+	searchQuery := url.Values{
+		"q":     {url.QueryEscape(query)},
+		"limit": {strconv.Itoa(int(limit))},
+		"type":  {"album,track,artist"},
+	}.Encode()
+
+	var searchResults searchResponse
+	err := spot.getHelper(endpointSearch+"?"+searchQuery, &searchResults)
+
+	if err != nil {
+		return Search{}, err
+	}
+
+	search := Search{}
+	for _, track := range searchResults.Tracks.Items {
+		search.Tracks = append(search.Tracks, track.toDB())
+	}
+
+	for _, artist := range searchResults.Artists.Items {
+		search.Artists = append(search.Artists, artist.toDB())
+	}
+
+	for _, album := range searchResults.Albums.Items {
+		search.Albums = append(search.Albums, album.toDB())
+	}
+
+	return search, nil
+}
+
 func (spot *api) GetTrackById(id string) (*db.Track, error) {
-	resource, err := spot.getResource("track", identifier{spotifyId: id})
+	resource, err := spot.getResource("track", id)
 	if err != nil {
 		return nil, err
 	}
@@ -227,7 +220,15 @@ func (spot *api) GetTrackById(id string) (*db.Track, error) {
 }
 
 func (spot *api) GetTrackByMatch(iden db.ResourceIdentifier) (*db.Track, error) {
-	resource, err := spot.getResource("track", identifier{title: iden.Title, artist: iden.Artist})
+	// perform a search to obtain id of the desired track
+	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	firstResultId := search.Tracks[0].SpotifyId
+
+	resource, err := spot.getResource("track", firstResultId)
 	if err != nil {
 		return nil, err
 	}
@@ -237,7 +238,7 @@ func (spot *api) GetTrackByMatch(iden db.ResourceIdentifier) (*db.Track, error) 
 }
 
 func (spot *api) GetArtistById(id string) (*db.Artist, error) {
-	resource, err := spot.getResource("artist", identifier{spotifyId: id})
+	resource, err := spot.getResource("artist", id)
 	if err != nil {
 		return nil, err
 	}
@@ -247,7 +248,13 @@ func (spot *api) GetArtistById(id string) (*db.Artist, error) {
 }
 
 func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier) (*db.Artist, error) {
-	resource, err := spot.getResource("artist", identifier{title: iden.Title, artist: iden.Artist})
+	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	firstResultId := search.Artists[0].SpotifyId
+	resource, err := spot.getResource("artist", firstResultId)
 	if err != nil {
 		return nil, err
 	}
@@ -257,7 +264,7 @@ func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier) (*db.Artist, error
 }
 
 func (spot *api) GetAlbumById(id string) (*db.Album, error) {
-	resource, err := spot.getResource("album", identifier{spotifyId: id})
+	resource, err := spot.getResource("album", id)
 	if err != nil {
 		return nil, err
 	}
@@ -267,20 +274,20 @@ func (spot *api) GetAlbumById(id string) (*db.Album, error) {
 }
 
 func (spot *api) GetAlbumByMatch(iden db.ResourceIdentifier) (*db.Album, error) {
-	resource, err := spot.getResource("album", identifier{title: iden.Title, artist: iden.Artist})
+	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
+	if err != nil {
+		return nil, err
+	}
+
+	firstResultId := search.Albums[0].SpotifyId
+
+	resource, err := spot.getResource("album", firstResultId)
 	if err != nil {
 		return nil, err
 	}
 
 	album := resource.(db.Album)
 	return &album, nil
-}
-
-// identify a spotify resource by titl+artist or by unique Id
-type identifier struct {
-	spotifyId string
-	title     string
-	artist    string
 }
 
 type apiAccessToken struct {

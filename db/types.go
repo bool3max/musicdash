@@ -74,6 +74,8 @@ func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool
 }
 
 func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool) error {
+	// when .Preserve() is called we unconditionally preserve the object to the database
+	// queryBase := `insert into spotify_artist (spotifyid, name, spotifyuri, followers)`
 	return nil
 }
 
