@@ -2,60 +2,52 @@ package main
 
 import (
 	"bool3max/musicdash/db"
-	"context"
+	"bool3max/musicdash/service/spotify"
 	"fmt"
 	"log"
+	"os"
 )
 
 func main() {
-	// var provider db.ResourceProvider
-	// provider, err := spotify.NewAPI(os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID"), os.Getenv("MUSICDASH_SPOTIFY_SECRET"))
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	spotify_client_id := os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID")
+	spotify_client_secret := os.Getenv("MUSICDASH_SPOTIFY_SECRET")
 
-	// album, err := provider.GetAlbumByMatch(db.ResourceIdentifier{Artist: "travis scott", Title: "rodeo"})
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// fullAlbum, err := provider.GetAlbumById(album.SpotifyId)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// for _, track := range fullAlbum.Tracks {
-	// 	fmt.Printf("%v -- {%v}\n", track.Title, track.Duration)
-	// }
-
-	drake := db.Track{
-		SpotifyId: "1234abcd",
-	}
-
-	dbpool, err := db.NewPool()
+	provider, err := spotify.NewAPI(spotify_client_id, spotify_client_secret)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatal("error creating spotify provider")
 	}
 
-	preserved, err := drake.IsPreserved(context.Background(), dbpool)
-	if err != nil {
-		log.Fatal(err)
-	}
-
-	if preserved {
-		fmt.Println("track IN DATABASE")
-	} else {
-		fmt.Println("track NOT IN DATABASE")
-	}
-
-	// plays, err := lastfm.GetAllPlays(os.Getenv("LASTFM_API_KEY"), "deadaptation")
+	// dbpool, err := db.NewPool()
 	// if err != nil {
-	// 	log.Fatal("failed from main", err)
+	// 	log.Fatal(err)
 	// }
 
-	// for _, play := range plays {
-	// 	fmt.Printf("%v - %v (%v)\n\t%v\n", play.Artist, play.Title, play.Album, play.Timestamp)
+	album, err := provider.GetAlbumByMatch(db.ResourceIdentifier{
+		Artist: "Travis Scott",
+		Title:  "UTOPIA",
+	})
+
+	if err != nil {
+		log.Fatal("error getting travis", err)
+	}
+
+	fmt.Printf("%+v\n", album)
+
+	// ----------
+
+	// dbpool, err := db.NewPool()
+	// if err != nil {
+	// 	log.Fatal(err)
 	// }
 
-	// fmt.Printf("Total tracks: %v", len(plays))
+	// preserved, err := (&db.Artist{SpotifyId: "1234abcd"}).IsPreserved(context.Background(), dbpool)
+	// if err != nil {
+	// 	log.Fatal(err)
+	// }
+
+	// if preserved {
+	// 	fmt.Println("track IN DATABASE")
+	// } else {
+	// 	fmt.Println("track NOT IN DATABASE")
+	// }
 }

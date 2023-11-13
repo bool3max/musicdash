@@ -2,6 +2,7 @@ package db
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -57,6 +58,18 @@ type Artist struct {
 	SpotifyFollowerCount int
 }
 
+// Obtain an artist's complete discography using the specified provider
+// after which it will be available in artist.Discography.
+func (artist *Artist) FillDiscography(provider ResourceProvider) error {
+	discog, err := provider.GetArtistDiscography(artist, nil)
+	if err != nil {
+		return err
+	}
+
+	artist.Discography = discog
+	return nil
+}
+
 func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	row := pool.QueryRow(ctx, "select spotifyid from spotify_artist where spotifyid=$1", artist.SpotifyId)
 
@@ -73,9 +86,32 @@ func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool
 	}
 }
 
-func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool) error {
-	// when .Preserve() is called we unconditionally preserve the object to the database
-	// queryBase := `insert into spotify_artist (spotifyid, name, spotifyuri, followers)`
+func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, preserveDiscography bool) error {
+	sqlQuery := `
+		insert into spotify_artist
+		(spotifyid, name, spotifyuri, followers) 
+		values ($1, $2, $3, $4)
+	`
+
+	// insert base info of artist
+	_, err := pool.Exec(
+		ctx,
+		sqlQuery,
+		artist.SpotifyId,
+		artist.Name,
+		artist.SpotifyURI,
+		artist.SpotifyFollowerCount,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	// if desired, insert albums in artist's discography
+	if preserveDiscography && artist.Discography != nil {
+		fmt.Println("inserting discog...")
+	}
+
 	return nil
 }
 
@@ -116,6 +152,7 @@ type ResourceProvider interface {
 	GetTrackByMatch(ResourceIdentifier) (*Track, error)
 	GetAlbumById(string) (*Album, error)
 	GetAlbumByMatch(ResourceIdentifier) (*Album, error)
-	GetArtistById(string) (*Artist, error)
-	GetArtistByMatch(ResourceIdentifier) (*Artist, error)
+	GetArtistById(string, bool) (*Artist, error)
+	GetArtistByMatch(ResourceIdentifier, bool) (*Artist, error)
+	GetArtistDiscography(*Artist, []string) ([]Album, error)
 }

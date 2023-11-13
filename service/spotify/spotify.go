@@ -237,17 +237,24 @@ func (spot *api) GetTrackByMatch(iden db.ResourceIdentifier) (*db.Track, error) 
 	return &track, nil
 }
 
-func (spot *api) GetArtistById(id string) (*db.Artist, error) {
+func (spot *api) GetArtistById(id string, fillDiscog bool) (*db.Artist, error) {
 	resource, err := spot.getResource("artist", id)
 	if err != nil {
 		return nil, err
 	}
 
 	artist := resource.(db.Artist)
+
+	if fillDiscog {
+		if err := artist.FillDiscography(spot); err != nil {
+			return nil, err
+		}
+	}
+
 	return &artist, nil
 }
 
-func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier) (*db.Artist, error) {
+func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, fillDiscog bool) (*db.Artist, error) {
 	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
 	if err != nil {
 		return nil, err
@@ -260,6 +267,11 @@ func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier) (*db.Artist, error
 	}
 
 	artist := resource.(db.Artist)
+	if fillDiscog {
+		if err := artist.FillDiscography(spot); err != nil {
+			return nil, err
+		}
+	}
 	return &artist, nil
 }
 
@@ -288,6 +300,43 @@ func (spot *api) GetAlbumByMatch(iden db.ResourceIdentifier) (*db.Album, error) 
 
 	album := resource.(db.Album)
 	return &album, nil
+}
+
+// Given an Artist, return their complete discography. This is necessary given
+// that /artist/<id> does not return any discography information.
+// includeGroups specifies types of albums to include in the response and can contain
+// any of the following, at most once: album, single, appears_on, compilation
+// If includeGroups is nil, {"album"} is assumed
+func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []string) ([]db.Album, error) {
+	if includeGroups == nil {
+		includeGroups = []string{"album"}
+	}
+
+	var response struct {
+		Items []album
+
+		Href   string `json:"href"`
+		Next   string `json:"next"`
+		Offset int    `json:"offset"`
+		Limit  int    `json:"limit"`
+	}
+
+	queryParams := url.Values{
+		"limit":          {"50"},
+		"include_groups": {strings.Join(includeGroups, ",")},
+	}.Encode()
+
+	err := spot.getHelper(endpointArtist+artist.SpotifyId+"/albums?"+queryParams, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	converted := make([]db.Album, len(response.Items))
+	for idx, album := range response.Items {
+		converted[idx] = album.toDB()
+	}
+
+	return converted, nil
 }
 
 type apiAccessToken struct {
