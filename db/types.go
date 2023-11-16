@@ -2,36 +2,146 @@ package db
 
 import (
 	"context"
-	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-type AlbumType int
+type AlbumType string
 
 const (
-	RegularAlbum AlbumType = iota
-	Compilation
-	Single
+	AlbumRegular     AlbumType = "regular"
+	AlbumCompilation AlbumType = "compilation"
+	AlbumSingle      AlbumType = "single"
 )
 
 type Resource interface {
 	// check if the corresponding resource is preserved
 	// in the local database
-	IsPreserved() (bool, error)
+	IsPreserved(context.Context, *pgxpool.Pool) (bool, error)
+
+	// preserve the corresponding resource to the local database
+	Preserve(context.Context, *pgxpool.Pool, bool) error
 }
 
 type Track struct {
 	Title             string
 	Duration          time.Duration
 	TracklistNum      int
+	IsExplicit        bool
 	Album             Album
 	Artists           []Artist
 	SpotifyId         string
 	SpotifyURI        string
 	SpotifyPopularity int
+}
+
+// Preserve the track into the local database. Preserving a track performs
+// the following database operations:
+//  1. stores the base info of the track into public.spotify_track
+//  2. stores the performing artists into public.spotify_track_artist
+//     , properly marking the main performing artist, and preserving
+//     any performing artists that aren't already in the database
+//  3. stores the belonging albums into public.spotify_track_album,
+//     preserving any belonging albums that aren't preserved
+func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
+	sqlQueryBaseInfo := `
+		insert into spotify_track
+		(spotifyid, title, duration, tracklistnum, explicit, popularity, spotifyuri)	
+		values ($1, $2, $3, $4, $5, $6, $7)
+	`
+
+	_, err := pool.Exec(
+		ctx,
+		sqlQueryBaseInfo,
+		track.SpotifyId,
+		track.Title,
+		track.Duration.Milliseconds(),
+		track.TracklistNum,
+		track.IsExplicit,
+		track.SpotifyPopularity,
+		track.SpotifyURI,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	// perserve the performing artists
+	sqlQueryPerformingArtist := `
+		insert into spotify_track_artist
+		(spotifyidtrack, spotifyidartist, ismain)	
+		values ($1, $2, $3)
+	`
+	for performingArtistIdx, performingArtist := range track.Artists {
+		// check if the current performing artist is currently preserved
+		// in the local database
+		isPreserved, err := performingArtist.IsPreserved(ctx, pool)
+		if err != nil {
+			return err
+		}
+
+		// if not, obtain full version of it and preserve it
+		if !isPreserved {
+			if err := performingArtist.Preserve(ctx, pool, recurse); err != nil {
+				return err
+			}
+		}
+
+		// the main performing artist of a track is always the
+		// first one in the artists array
+		isMain := performingArtistIdx == 0
+		_, err = pool.Exec(
+			ctx,
+			sqlQueryPerformingArtist,
+			track.SpotifyId,
+			performingArtist.SpotifyId,
+			isMain,
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	sqlQueryBelongingAlbum := `
+		insert into spotify_track_album
+		(spotifyidtrack, spotifyidalbum)
+		values ($1, $2)
+	`
+
+	// if the track's owning album is set, preserve the relationship
+	// in the database
+	// sometimes the track's .Album won't be set (empty struct)
+	// for example when the track comes from an Album.Tracks[], in that case
+	// the album is known in advanace and does not need to be stored in each
+	// individual track
+	if track.Album.SpotifyId != "" {
+		albumIsPreserved, err := track.Album.IsPreserved(ctx, pool)
+		if err != nil {
+			return err
+		}
+
+		if !albumIsPreserved {
+			if err = track.Album.Preserve(ctx, pool, recurse); err != nil {
+				return err
+			}
+		}
+
+		_, err = pool.Exec(
+			ctx,
+			sqlQueryBelongingAlbum,
+			track.SpotifyId,
+			track.Album.SpotifyId,
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (track *Track) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
@@ -86,7 +196,7 @@ func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool
 	}
 }
 
-func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, preserveDiscography bool) error {
+func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQuery := `
 		insert into spotify_artist
 		(spotifyid, name, spotifyuri, followers) 
@@ -107,9 +217,9 @@ func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, preserve
 		return err
 	}
 
-	// if desired, insert albums in artist's discography
-	if preserveDiscography && artist.Discography != nil {
-		fmt.Println("inserting discog...")
+	// preserve the Artist's entire discography if it exists and if told to recurse
+	if recurse && artist.Discography != nil {
+		// TODO: implement
 	}
 
 	return nil
@@ -124,6 +234,82 @@ type Album struct {
 	SpotifyId        string
 	SpotifyURI       string
 	SpotifyAlbumType AlbumType
+}
+
+func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
+	sqlQueryBaseInfo := `
+		insert into spotify_album
+		(spotifyid, title, counttracks, releasedate, type, spotifyuri)
+		values ($1, $2, $3, $4, $5, $6)
+	`
+
+	_, err := pool.Exec(
+		ctx,
+		sqlQueryBaseInfo,
+		album.SpotifyId,
+		album.Title,
+		album.CountTracks,
+		album.ReleaseDate,
+		album.SpotifyAlbumType,
+		album.SpotifyURI,
+	)
+
+	if err != nil {
+		return err
+	}
+
+	sqlQueryPerformingArtist := `
+		insert into spotify_album_artist
+		(spotifyidartist, spotifyidalbum, ismain)
+		values ($1, $2, $3)
+	`
+
+	// create a relation in public.spotify_album_artist
+	// for each performing artist in album.Artists
+	for performingArtistIdx, performingArtist := range album.Artists {
+		artistIsPreserved, err := performingArtist.IsPreserved(ctx, pool)
+		if err != nil {
+			return err
+		}
+
+		if !artistIsPreserved {
+			if err = performingArtist.Preserve(ctx, pool, recurse); err != nil {
+				return err
+			}
+		}
+
+		isMain := performingArtistIdx == 0
+		_, err = pool.Exec(
+			ctx,
+			sqlQueryPerformingArtist,
+			performingArtist.SpotifyId,
+			album.SpotifyId,
+			isMain,
+		)
+
+		if err != nil {
+			return err
+		}
+	}
+
+	// if album has list of tracks and told to recurse,
+	// preserve all of the tracks as well
+	if recurse && album.Tracks != nil {
+		for _, albumTrack := range album.Tracks {
+			trackPreserved, err := albumTrack.IsPreserved(ctx, pool)
+			if err != nil {
+				return err
+			}
+
+			if !trackPreserved {
+				if err = albumTrack.Preserve(ctx, pool, recurse); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	return nil
 }
 
 func (album *Album) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {

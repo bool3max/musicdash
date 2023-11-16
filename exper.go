@@ -3,7 +3,7 @@ package main
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/service/spotify"
-	"fmt"
+	"context"
 	"log"
 	"os"
 )
@@ -17,37 +17,29 @@ func main() {
 		log.Fatal("error creating spotify provider")
 	}
 
-	// dbpool, err := db.NewPool()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
+	dbpool, err := db.NewPool()
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	album, err := provider.GetAlbumByMatch(db.ResourceIdentifier{
+	rodeo, err := provider.GetAlbumByMatch(db.ResourceIdentifier{
 		Artist: "Travis Scott",
-		Title:  "UTOPIA",
+		Title:  "Rodeo",
 	})
 
 	if err != nil {
 		log.Fatal("error getting travis", err)
 	}
 
-	fmt.Printf("%+v\n", album)
+	preserved, err := rodeo.IsPreserved(context.Background(), dbpool)
+	if err != nil {
+		log.Fatal(err)
+	}
 
-	// ----------
-
-	// dbpool, err := db.NewPool()
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// preserved, err := (&db.Artist{SpotifyId: "1234abcd"}).IsPreserved(context.Background(), dbpool)
-	// if err != nil {
-	// 	log.Fatal(err)
-	// }
-
-	// if preserved {
-	// 	fmt.Println("track IN DATABASE")
-	// } else {
-	// 	fmt.Println("track NOT IN DATABASE")
-	// }
+	if !preserved {
+		err = rodeo.Preserve(context.Background(), dbpool, true)
+		if err != nil {
+			log.Fatal(err)
+		}
+	}
 }

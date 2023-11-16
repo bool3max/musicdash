@@ -18,7 +18,7 @@ type track struct {
 	SpotifyURI string `json:"uri"`
 	DurationMS int    `json:"duration_ms"`
 	TrackNum   int    `json:"track_number"`
-	Explicit   bool
+	Explicit   bool   `json:"explicit"`
 	Popularity int
 }
 
@@ -32,6 +32,7 @@ func (track track) toDB() db.Track {
 		Title:             track.Name,
 		Duration:          time.Duration(track.DurationMS * 1e6),
 		TracklistNum:      track.TrackNum,
+		IsExplicit:        track.Explicit,
 		Album:             track.Album.toDB(),
 		Artists:           dbArtists,
 		SpotifyId:         track.Id,
@@ -47,7 +48,7 @@ type artist struct {
 		Total int
 	}
 	Images     []image
-	Populairy  int
+	Popularity int    `json:"popularity"`
 	SpotifyURI string `json:"uri"`
 }
 
@@ -87,14 +88,16 @@ func (album album) toDB() db.Album {
 	}
 
 	releaseDate, _ := time.Parse(time.DateOnly, album.ReleaseDate)
+
+	// parse album type from string to db.AlbumType
 	var albumType db.AlbumType
 	switch album.Type {
 	case "album":
-		albumType = db.RegularAlbum
+		albumType = db.AlbumRegular
 	case "compilation":
-		albumType = db.Compilation
+		albumType = db.AlbumCompilation
 	case "single":
-		albumType = db.Single
+		albumType = db.AlbumSingle
 	}
 
 	return db.Album{
