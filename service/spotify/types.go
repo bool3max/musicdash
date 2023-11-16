@@ -71,7 +71,7 @@ type album struct {
 		Items []track
 	}
 	Images     []image
-	SpotifyURI string `json:"spotify_uri"`
+	SpotifyURI string `json:"uri"`
 }
 
 func (album album) toDB() db.Album {
