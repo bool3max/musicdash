@@ -421,6 +421,6 @@ type ResourceProvider interface {
 	GetArtistById(string, int) (*Artist, error)
 	GetArtistByMatch(ResourceIdentifier, int) (*Artist, error)
 
-	GetArtistDiscography(*Artist, []string) ([]Album, error)
+	GetArtistDiscography(*Artist, []AlbumType) ([]Album, error)
 	GetAlbumTracklist(*Album) ([]Track, error)
 }

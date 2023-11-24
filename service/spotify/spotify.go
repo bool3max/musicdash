@@ -313,9 +313,9 @@ func (spot *api) GetAlbumByMatch(iden db.ResourceIdentifier) (*db.Album, error) 
 // includeGroups specifies types of albums to include in the response and can contain
 // any of the following, at most once: album, single, appears_on, compilation
 // If includeGroups is nil, {"album"} is assumed
-func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []string) ([]db.Album, error) {
+func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.AlbumType) ([]db.Album, error) {
 	if includeGroups == nil {
-		includeGroups = []string{"album"}
+		includeGroups = []db.AlbumType{db.AlbumRegular}
 	}
 
 	var response struct {
@@ -329,7 +329,7 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []string)
 
 	queryParams := url.Values{
 		"limit":          {"50"},
-		"include_groups": {strings.Join(includeGroups, ",")},
+		"include_groups": {db.IncludeGroupToString(includeGroups)},
 	}.Encode()
 
 	err := spot.getHelper(endpointArtist+artist.SpotifyId+"/albums?"+queryParams, &response)

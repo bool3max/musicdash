@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -22,6 +23,15 @@ func NewPool() (*pgxpool.Pool, error) {
 // a ResourceProvider that pulls data in from the local database
 type db struct {
 	pool *pgxpool.Pool
+}
+
+func IncludeGroupToString(group []AlbumType) string {
+	as_strings := make([]string, 0, len(group))
+	for _, g := range group {
+		as_strings = append(as_strings, string(g))
+	}
+
+	return strings.Join(as_strings, ",")
 }
 
 func (db *db) GetTrackById(trackId string) (*Track, error) {
@@ -242,9 +252,9 @@ func (db *db) GetArtistById(artistId string, discogFillLevel int) (*Artist, erro
 	return artist, nil
 }
 
-func (db *db) GetArtistDiscography(artist *Artist, includeGroups []string) ([]Album, error) {
+func (db *db) GetArtistDiscography(artist *Artist, includeGroups []AlbumType) ([]Album, error) {
 	if includeGroups == nil {
-		includeGroups = []string{"album"}
+		includeGroups = []AlbumType{AlbumRegular}
 	}
 
 	discog := make([]Album, 0)

@@ -17,9 +17,9 @@ func main() {
 
 	dummyDrake := db.Artist{SpotifyId: "3TVXtAsR1Inumwj472S9r4"}
 
-	discog, err := dbobj.GetArtistDiscography(&dummyDrake, []string{"single"})
+	discog, err := dbobj.GetArtistDiscography(&dummyDrake, []db.AlbumType{db.AlbumSingle})
 	if err != nil {
-		log.Fatal("error getting drake discog")
+		log.Fatal("error getting drake discog", err)
 	}
 
 	fmt.Printf("%+v\n", discog)
