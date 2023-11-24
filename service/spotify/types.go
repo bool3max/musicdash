@@ -101,14 +101,14 @@ func (album album) toDB() db.Album {
 	}
 
 	return db.Album{
-		Title:            album.Name,
-		CountTracks:      album.CountTracks,
-		Artists:          dbArtists,
-		Tracks:           dbTracks,
-		ReleaseDate:      releaseDate,
-		SpotifyId:        album.Id,
-		SpotifyURI:       album.SpotifyURI,
-		SpotifyAlbumType: albumType,
+		Title:       album.Name,
+		CountTracks: album.CountTracks,
+		Artists:     dbArtists,
+		Tracks:      dbTracks,
+		ReleaseDate: releaseDate,
+		SpotifyId:   album.Id,
+		SpotifyURI:  album.SpotifyURI,
+		Type:        albumType,
 	}
 }
 

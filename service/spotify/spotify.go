@@ -20,6 +20,12 @@ const (
 	endpointSearch = "https://api.spotify.com/v1/search/"
 )
 
+type apiAccessToken struct {
+	Access_token string `json:"access_token"`
+	Token_type   string `json:"token_type"`
+	Expires_in   int    `json:"expires_in"`
+}
+
 type spotifyAuth struct {
 	client_id, client_secret string
 	token                    string
@@ -237,7 +243,7 @@ func (spot *api) GetTrackByMatch(iden db.ResourceIdentifier) (*db.Track, error) 
 	return &track, nil
 }
 
-func (spot *api) GetArtistById(id string, fillDiscog bool) (*db.Artist, error) {
+func (spot *api) GetArtistById(id string, discogFillLevel int) (*db.Artist, error) {
 	resource, err := spot.getResource("artist", id)
 	if err != nil {
 		return nil, err
@@ -245,8 +251,8 @@ func (spot *api) GetArtistById(id string, fillDiscog bool) (*db.Artist, error) {
 
 	artist := resource.(db.Artist)
 
-	if fillDiscog {
-		if err := artist.FillDiscography(spot); err != nil {
+	if discogFillLevel > 0 {
+		if err := artist.FillDiscography(spot, discogFillLevel > 1); err != nil {
 			return nil, err
 		}
 	}
@@ -254,7 +260,7 @@ func (spot *api) GetArtistById(id string, fillDiscog bool) (*db.Artist, error) {
 	return &artist, nil
 }
 
-func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, fillDiscog bool) (*db.Artist, error) {
+func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, fillDiscog int) (*db.Artist, error) {
 	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
 	if err != nil {
 		return nil, err
@@ -267,8 +273,8 @@ func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, fillDiscog bool) (
 	}
 
 	artist := resource.(db.Artist)
-	if fillDiscog {
-		if err := artist.FillDiscography(spot); err != nil {
+	if fillDiscog > 0 {
+		if err := artist.FillDiscography(spot, fillDiscog > 1); err != nil {
 			return nil, err
 		}
 	}
@@ -303,7 +309,7 @@ func (spot *api) GetAlbumByMatch(iden db.ResourceIdentifier) (*db.Album, error) 
 }
 
 // Given an Artist, return their complete discography. This is necessary given
-// that /artist/<id> does not return any discography information.
+// that api.GetArtistBy<IdentifierType> does not return any discography information.
 // includeGroups specifies types of albums to include in the response and can contain
 // any of the following, at most once: album, single, appears_on, compilation
 // If includeGroups is nil, {"album"} is assumed
@@ -339,8 +345,33 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []string)
 	return converted, nil
 }
 
-type apiAccessToken struct {
-	Access_token string `json:"access_token"`
-	Token_type   string `json:"token_type"`
-	Expires_in   int    `json:"expires_in"`
+// Given an Album, return all of its tracks. This method is necessary
+// considering that sometimes db.Album objects won't have their .Tracks[]
+// filled, for example if they came from db.Artist.FillDiscography(), etc...
+func (spot *api) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
+	var response struct {
+		Items []track
+
+		Href   string `json:"href"`
+		Next   string `json:"next"`
+		Offset int    `json:"offset"`
+		Limit  int    `json:"limit"`
+	}
+
+	queryParams := url.Values{
+		"limit": {"50"},
+	}.Encode()
+
+	err := spot.getHelper(endpointAlbum+album.SpotifyId+"/tracks?"+queryParams, &response)
+	if err != nil {
+		return nil, err
+	}
+
+	// convert all spotify.track to db.Track
+	converted := make([]db.Track, len(response.Items))
+	for idx, track := range response.Items {
+		converted[idx] = track.toDB()
+	}
+
+	return converted, nil
 }

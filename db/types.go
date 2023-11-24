@@ -50,6 +50,8 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		insert into spotify_track
 		(spotifyid, title, duration, tracklistnum, explicit, popularity, spotifyuri)	
 		values ($1, $2, $3, $4, $5, $6, $7)
+		on conflict on constraint track_pk do update
+		set title = $2, duration = $3, tracklistnum = $4, explicit = $5, popularity = $6, spotifyuri = $7
 	`
 
 	_, err := pool.Exec(
@@ -73,6 +75,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		insert into spotify_track_artist
 		(spotifyidtrack, spotifyidartist, ismain)	
 		values ($1, $2, $3)
+		on conflict on constraint track_artist_pk do nothing
 	`
 	for performingArtistIdx, performingArtist := range track.Artists {
 		// check if the current performing artist is currently preserved
@@ -109,6 +112,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		insert into spotify_track_album
 		(spotifyidtrack, spotifyidalbum)
 		values ($1, $2)
+		on conflict on constraint track_album_pk do nothing
 	`
 
 	// if the track's owning album is set, preserve the relationship
@@ -170,10 +174,20 @@ type Artist struct {
 
 // Obtain an artist's complete discography using the specified provider
 // after which it will be available in artist.Discography.
-func (artist *Artist) FillDiscography(provider ResourceProvider) error {
+// If fillTracklists is true, each one of the album's tracklists is also provided.
+func (artist *Artist) FillDiscography(provider ResourceProvider, fillTracklists bool) error {
 	discog, err := provider.GetArtistDiscography(artist, nil)
 	if err != nil {
 		return err
+	}
+
+	if fillTracklists {
+		for discogAlbumIdx := range discog {
+			err = discog[discogAlbumIdx].FillTracklist(provider)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	artist.Discography = discog
@@ -201,6 +215,8 @@ func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse 
 		insert into spotify_artist
 		(spotifyid, name, spotifyuri, followers) 
 		values ($1, $2, $3, $4)
+		on conflict on constraint artist_pk do update
+		set name = $2, spotifyuri = $3, followers = $4
 	`
 
 	// insert base info of artist
@@ -217,23 +233,39 @@ func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse 
 		return err
 	}
 
-	// preserve the Artist's entire discography if it exists and if told to recurse
-	if recurse && artist.Discography != nil {
-		// TODO: implement
+	// preserve the Artist's entire discography if told to recurse
+	if recurse {
+		// if artist.Discography is not populated (i.e. is nil)
+		// this range simply won't be performed
+		for _, album := range artist.Discography {
+			albumPreserved, err := album.IsPreserved(ctx, pool)
+			if err != nil {
+				return err
+			}
+
+			if albumPreserved {
+				continue
+			}
+
+			err = album.Preserve(ctx, pool, recurse)
+			if err != nil {
+				return err
+			}
+		}
 	}
 
 	return nil
 }
 
 type Album struct {
-	Title            string
-	CountTracks      int
-	Artists          []Artist
-	Tracks           []Track
-	ReleaseDate      time.Time
-	SpotifyId        string
-	SpotifyURI       string
-	SpotifyAlbumType AlbumType
+	Title       string
+	CountTracks int
+	Artists     []Artist
+	Tracks      []Track
+	ReleaseDate time.Time
+	SpotifyId   string
+	SpotifyURI  string
+	Type        AlbumType
 }
 
 func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
@@ -241,6 +273,8 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		insert into spotify_album
 		(spotifyid, title, counttracks, releasedate, type, spotifyuri)
 		values ($1, $2, $3, $4, $5, $6)
+		on conflict on constraint album_pk do update
+		set title = $2, counttracks = $3, releasedate = $4, type = $5, spotifyuri = $6
 	`
 
 	_, err := pool.Exec(
@@ -250,7 +284,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		album.Title,
 		album.CountTracks,
 		album.ReleaseDate,
-		album.SpotifyAlbumType,
+		album.Type,
 		album.SpotifyURI,
 	)
 
@@ -262,6 +296,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		insert into spotify_album_artist
 		(spotifyidartist, spotifyidalbum, ismain)
 		values ($1, $2, $3)
+		on conflict on constraint album_artist_pk do nothing
 	`
 
 	// create a relation in public.spotify_album_artist
@@ -294,18 +329,42 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 
 	// if album has list of tracks and told to recurse,
 	// preserve all of the tracks as well
-	if recurse && album.Tracks != nil {
+	if recurse {
 		for _, albumTrack := range album.Tracks {
 			trackPreserved, err := albumTrack.IsPreserved(ctx, pool)
 			if err != nil {
 				return err
 			}
 
-			if !trackPreserved {
-				if err = albumTrack.Preserve(ctx, pool, recurse); err != nil {
-					return err
-				}
+			if trackPreserved {
+				continue
 			}
+
+			if err = albumTrack.Preserve(ctx, pool, recurse); err != nil {
+				return err
+			}
+
+			// create a relation in public.spotify_track_album
+			// for the newly inserted track
+
+			sqlQueryTrackAlbumRelation := `
+				insert into spotify_track_album
+				(spotifyidtrack, spotifyidalbum)
+				values ($1, $2)
+				on conflict on constraint track_album_pk do nothing
+			`
+
+			_, err = pool.Exec(
+				ctx,
+				sqlQueryTrackAlbumRelation,
+				albumTrack.SpotifyId,
+				album.SpotifyId,
+			)
+
+			if err != nil {
+				return err
+			}
+
 		}
 	}
 
@@ -328,6 +387,16 @@ func (album *Album) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, 
 	}
 }
 
+func (album *Album) FillTracklist(provider ResourceProvider) error {
+	tracklist, err := provider.GetAlbumTracklist(album)
+	if err != nil {
+		return err
+	}
+
+	album.Tracks = tracklist
+	return nil
+}
+
 // used to search for an artist, album, or track by name
 type ResourceIdentifier struct {
 	Title, Artist string
@@ -336,9 +405,18 @@ type ResourceIdentifier struct {
 type ResourceProvider interface {
 	GetTrackById(string) (*Track, error)
 	GetTrackByMatch(ResourceIdentifier) (*Track, error)
+
 	GetAlbumById(string) (*Album, error)
 	GetAlbumByMatch(ResourceIdentifier) (*Album, error)
-	GetArtistById(string, bool) (*Artist, error)
-	GetArtistByMatch(ResourceIdentifier, bool) (*Artist, error)
+
+	// The second "int" argument in the next two methods denotes
+	// whether a discography should be provided when fetching an artist.
+	// The value 0 means fetch no discography. The value 1 means fetch only
+	// the albums, but not their tracklists. The value 2 or above means fetch
+	// both the discographies and the albums' associated tracklists.
+	GetArtistById(string, int) (*Artist, error)
+	GetArtistByMatch(ResourceIdentifier, int) (*Artist, error)
+
 	GetArtistDiscography(*Artist, []string) ([]Album, error)
+	GetAlbumTracklist(*Album) ([]Track, error)
 }
