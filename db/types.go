@@ -11,7 +11,7 @@ import (
 type AlbumType string
 
 const (
-	AlbumRegular     AlbumType = "regular"
+	AlbumRegular     AlbumType = "album"
 	AlbumCompilation AlbumType = "compilation"
 	AlbumSingle      AlbumType = "single"
 )
@@ -414,6 +414,10 @@ type ResourceProvider interface {
 	// The value 0 means fetch no discography. The value 1 means fetch only
 	// the albums, but not their tracklists. The value 2 or above means fetch
 	// both the discographies and the albums' associated tracklists.
+	// Note that ResourceProvider implementations may always provide *more*
+	// data than has been requested, but never less. So you may receive
+	// an artist with a fully filled out discography despite specifying
+	// GetArtistByMatch(..., 0).
 	GetArtistById(string, int) (*Artist, error)
 	GetArtistByMatch(ResourceIdentifier, int) (*Artist, error)
 

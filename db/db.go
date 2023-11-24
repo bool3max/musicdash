@@ -242,8 +242,82 @@ func (db *db) GetArtistById(artistId string, discogFillLevel int) (*Artist, erro
 	return artist, nil
 }
 
+func (db *db) GetArtistDiscography(artist *Artist, includeGroups []string) ([]Album, error) {
+	if includeGroups == nil {
+		includeGroups = []string{"album"}
+	}
+
+	discog := make([]Album, 0)
+
+	sqlQueryDiscog := `
+		select spotifyidalbum
+		from spotify_album_artist
+			inner join spotify_album on (spotify_album_artist.spotifyidalbum=spotify_album.spotifyid)	
+		where spotifyidartist=$1 and ismain is true and type=any($2)
+	`
+
+	rows, err := db.pool.Query(
+		context.TODO(),
+		sqlQueryDiscog,
+		artist.SpotifyId,
+		includeGroups,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	albumIds, err := pgx.CollectRows[string](rows, pgx.RowTo)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, albumId := range albumIds {
+		album, err := db.GetAlbumById(albumId)
+		if err != nil {
+			return nil, err
+		}
+
+		discog = append(discog, *album)
+	}
+
+	return discog, nil
+}
+
 func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
-	tracklist := make([]Track, 0)
+	tracklist := make([]Track, album.CountTracks)
+
+	sqlQueryTracks := `
+		select spotifyidtrack
+		from spotify_track_album
+		where spotifyidalbum=$1
+		limit $2
+	`
+
+	rows, err := db.pool.Query(
+		context.TODO(),
+		sqlQueryTracks,
+		album.SpotifyId,
+		album.CountTracks,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	trackIds, err := pgx.CollectRows[string](rows, pgx.RowTo)
+	if err != nil {
+		return nil, err
+	}
+
+	for trackIdx, trackId := range trackIds {
+		track, err := db.GetTrackById(trackId)
+		if err != nil {
+			return nil, err
+		}
+
+		tracklist[trackIdx] = *track
+	}
 
 	return tracklist, nil
 }
