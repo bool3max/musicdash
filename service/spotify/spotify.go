@@ -260,7 +260,7 @@ func (spot *api) GetArtistById(id string, discogFillLevel int) (*db.Artist, erro
 	return &artist, nil
 }
 
-func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, fillDiscog int) (*db.Artist, error) {
+func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, discogFillLevel int) (*db.Artist, error) {
 	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
 	if err != nil {
 		return nil, err
@@ -273,8 +273,8 @@ func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, fillDiscog int) (*
 	}
 
 	artist := resource.(db.Artist)
-	if fillDiscog > 0 {
-		if err := artist.FillDiscography(spot, fillDiscog > 1); err != nil {
+	if discogFillLevel > 0 {
+		if err := artist.FillDiscography(spot, discogFillLevel > 1); err != nil {
 			return nil, err
 		}
 	}

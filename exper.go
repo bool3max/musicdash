@@ -15,12 +15,15 @@ func main() {
 		log.Fatal("error initializing database", err)
 	}
 
-	dummyDrake := db.Artist{SpotifyId: "3TVXtAsR1Inumwj472S9r4"}
-
-	discog, err := dbobj.GetArtistDiscography(&dummyDrake, []db.AlbumType{db.AlbumSingle})
+	artist, err := dbobj.GetArtistById("3TVXtAsR1Inumwj472S9r4", 2)
 	if err != nil {
-		log.Fatal("error getting drake discog", err)
+		log.Fatal("error getting drake", err)
 	}
 
-	fmt.Printf("%+v\n", discog)
+	for _, album := range artist.Discography {
+		fmt.Printf("%s\n", album.Title)
+		for _, track := range album.Tracks {
+			fmt.Printf("\t%s\n", track.Title)
+		}
+	}
 }

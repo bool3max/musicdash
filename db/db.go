@@ -246,7 +246,7 @@ func (db *db) GetArtistById(artistId string, discogFillLevel int) (*Artist, erro
 	}
 
 	if discogFillLevel > 0 {
-		// TODO: implement fetching of discog from database
+		artist.FillDiscography(db, discogFillLevel > 1)
 	}
 
 	return artist, nil
@@ -330,6 +330,18 @@ func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
 	}
 
 	return tracklist, nil
+}
+
+func (db *db) GetAlbumByMatch(iden ResourceIdentifier) (*Album, error) {
+	return nil, nil
+}
+
+func (db *db) GetArtistByMatch(iden ResourceIdentifier, discogFillLevel int) (*Artist, error) {
+	return nil, nil
+}
+
+func (db *db) GetTrackByMatch(iden ResourceIdentifier) (*Track, error) {
+	return nil, nil
 }
 
 func New() (*db, error) {

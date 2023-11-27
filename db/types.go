@@ -183,8 +183,7 @@ func (artist *Artist) FillDiscography(provider ResourceProvider, fillTracklists 
 
 	if fillTracklists {
 		for discogAlbumIdx := range discog {
-			err = discog[discogAlbumIdx].FillTracklist(provider)
-			if err != nil {
+			if err := discog[discogAlbumIdx].FillTracklist(provider); err != nil {
 				return err
 			}
 		}
@@ -417,7 +416,9 @@ type ResourceProvider interface {
 	// Note that ResourceProvider implementations may always provide *more*
 	// data than has been requested, but never less. So you may receive
 	// an artist with a fully filled out discography despite specifying
-	// GetArtistByMatch(..., 0).
+	// GetArtistByMatch(..., 0), or a discography with both albums
+	// and their respective filled out tracklists despite specifying
+	// GetArtistByMatch(..., 1)
 	GetArtistById(string, int) (*Artist, error)
 	GetArtistByMatch(ResourceIdentifier, int) (*Artist, error)
 
