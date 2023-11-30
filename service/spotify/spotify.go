@@ -111,7 +111,7 @@ func NewAPI(client_id, client_secret string) (*api, error) {
 	return spot, nil
 }
 
-func (spot *api) getHelper(uri string, decodeTo any) error {
+func (spot *api) jsonGetHelper(uri string, decodeTo any) error {
 	// validate current access token
 	if _, err := spot.validateToken(); err != nil {
 		// current token expired but revalidation failed
@@ -169,7 +169,7 @@ func (spot *api) getResource(resourceType, spotifyId string) (any, error) {
 		resourcePtr = &album{}
 	}
 
-	if err := spot.getHelper(endpoint+spotifyId, resourcePtr); err != nil {
+	if err := spot.jsonGetHelper(endpoint+spotifyId, resourcePtr); err != nil {
 		return nil, err
 	}
 
@@ -185,15 +185,15 @@ func (spot *api) getResource(resourceType, spotifyId string) (any, error) {
 	}
 }
 
-func (spot *api) Search(query string, limit uint) (Search, error) {
+func (spot *api) Search(query string, limit int) (Search, error) {
 	searchQuery := url.Values{
 		"q":     {url.QueryEscape(query)},
-		"limit": {strconv.Itoa(int(limit))},
+		"limit": {strconv.Itoa(limit)},
 		"type":  {"album,track,artist"},
 	}.Encode()
 
 	var searchResults searchResponse
-	err := spot.getHelper(endpointSearch+"?"+searchQuery, &searchResults)
+	err := spot.jsonGetHelper(endpointSearch+"?"+searchQuery, &searchResults)
 
 	if err != nil {
 		return Search{}, err
@@ -332,7 +332,7 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.Albu
 		"include_groups": {db.IncludeGroupToString(includeGroups)},
 	}.Encode()
 
-	err := spot.getHelper(endpointArtist+artist.SpotifyId+"/albums?"+queryParams, &response)
+	err := spot.jsonGetHelper(endpointArtist+artist.SpotifyId+"/albums?"+queryParams, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -362,7 +362,7 @@ func (spot *api) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
 		"limit": {"50"},
 	}.Encode()
 
-	err := spot.getHelper(endpointAlbum+album.SpotifyId+"/tracks?"+queryParams, &response)
+	err := spot.jsonGetHelper(endpointAlbum+album.SpotifyId+"/tracks?"+queryParams, &response)
 	if err != nil {
 		return nil, err
 	}

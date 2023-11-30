@@ -48,13 +48,19 @@ type artist struct {
 		Total int
 	}
 	Images     []image
-	Popularity int    `json:"popularity"`
+	Popularity int
 	SpotifyURI string `json:"uri"`
 }
 
 func (artist artist) toDB() db.Artist {
+	dbImages := make([]db.Image, len(artist.Images))
+	for idx, img := range artist.Images {
+		dbImages[idx] = img.toDB(artist.Id)
+	}
+
 	return db.Artist{
 		Name:                 artist.Name,
+		Images:               dbImages,
 		SpotifyId:            artist.Id,
 		SpotifyURI:           artist.SpotifyURI,
 		SpotifyFollowerCount: artist.Followers.Total,
@@ -78,6 +84,7 @@ type album struct {
 func (album album) toDB() db.Album {
 	dbArtists := make([]db.Artist, len(album.Artists))
 	dbTracks := make([]db.Track, len(album.Tracks.Items))
+	dbImages := make([]db.Image, len(album.Images))
 
 	for idx, spotifyArtist := range album.Artists {
 		dbArtists[idx] = spotifyArtist.toDB()
@@ -85,6 +92,10 @@ func (album album) toDB() db.Album {
 
 	for idx, spotifyTrack := range album.Tracks.Items {
 		dbTracks[idx] = spotifyTrack.toDB()
+	}
+
+	for idx, img := range album.Images {
+		dbImages[idx] = img.toDB(album.Id)
 	}
 
 	releaseDate, _ := time.Parse(time.DateOnly, album.ReleaseDate)
@@ -106,6 +117,7 @@ func (album album) toDB() db.Album {
 		Artists:     dbArtists,
 		Tracks:      dbTracks,
 		ReleaseDate: releaseDate,
+		Images:      dbImages,
 		SpotifyId:   album.Id,
 		SpotifyURI:  album.SpotifyURI,
 		Type:        albumType,
@@ -115,6 +127,15 @@ func (album album) toDB() db.Album {
 type image struct {
 	Width, Height int
 	Url           string
+}
+
+func (image image) toDB(spotifyId string) db.Image {
+	return db.Image{
+		Width:     image.Width,
+		Height:    image.Height,
+		Url:       image.Url,
+		SpotifyId: spotifyId,
+	}
 }
 
 // albums, tracks, and artist returned via Search() usually contain

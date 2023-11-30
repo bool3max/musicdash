@@ -2,6 +2,8 @@ package db
 
 import (
 	"context"
+	"io"
+	"net/http"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -17,19 +19,100 @@ const (
 )
 
 type Resource interface {
-	// check if the corresponding resource is preserved
-	// in the local database
+	// Check if the corresponding resource is preserved in the local database
 	IsPreserved(context.Context, *pgxpool.Pool) (bool, error)
 
-	// preserve the corresponding resource to the local database
+	// Preserve the corresponding resource to the local database
+	// The third argument denotes whether to recurse and also preserve
+	// children of the resource. Argument may be ignored if the resource
+	// has no children.
 	Preserve(context.Context, *pgxpool.Pool, bool) error
 }
 
+// A visual representation of a Spotify resource identified by its Spotify ID.
+// Image.Data[] stores binary data of the image and may be empty (nil) if the
+// image hasn't yet been downloaded. Image.Download() downloads the image
+// data and populates Image.Data[] and Image.MimeType. Preserving the image
+// with Image.Preserve() downloads the image beforehand, if it hasn't already
+// been downloaded.
 type Image struct {
 	Width, Height int
 	MimeType      string
 	SpotifyId     string
+	Url           string
 	Data          []byte
+}
+
+// Download binary image data from img.Url and store it in img.Data.
+// Stores the MimeType of the binary data in img.MimeType.
+func (img *Image) Download() error {
+	resp, err := http.Get(img.Url)
+	if err != nil {
+		return err
+	}
+
+	defer resp.Body.Close()
+
+	img.Data, err = io.ReadAll(resp.Body)
+	if err != nil {
+		return err
+	}
+
+	img.MimeType = resp.Header.Get("Content-Type")
+	return nil
+}
+
+func (img *Image) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+	row := pool.QueryRow(
+		ctx,
+		`
+			select url
+			from spotify_images
+			where url=$1 and spotifyid=$2 and width=$3 and height=$4
+		`,
+		img.Url, img.SpotifyId, img.Width, img.Height,
+	)
+
+	var url string
+	err := row.Scan(&url)
+
+	switch err {
+	case pgx.ErrNoRows:
+		return false, nil
+	case nil:
+		return true, nil
+	default:
+		return false, err
+	}
+}
+
+func (img *Image) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
+	if img.Data == nil {
+		err := img.Download()
+		if err != nil {
+			return err
+		}
+	}
+
+	sqlQueryImg := `
+		insert into spotify_images
+		(spotifyid, url, width, height, data, mimetype)	
+		values
+		($1, $2, $3, $4, $5, $6)
+	`
+
+	_, err := pool.Exec(
+		ctx,
+		sqlQueryImg,
+		img.SpotifyId,
+		img.Url,
+		img.Width,
+		img.Height,
+		img.Data,
+		img.MimeType,
+	)
+
+	return err
 }
 
 type Track struct {
@@ -174,6 +257,7 @@ func (track *Track) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, 
 type Artist struct {
 	Name                 string
 	Discography          []Album
+	Images               []Image
 	SpotifyId            string
 	SpotifyURI           string
 	SpotifyFollowerCount int
@@ -266,6 +350,7 @@ type Album struct {
 	CountTracks int
 	Artists     []Artist
 	Tracks      []Track
+	Images      []Image
 	ReleaseDate time.Time
 	SpotifyId   string
 	SpotifyURI  string
