@@ -225,9 +225,9 @@ func (spot *api) GetTrackById(id string) (*db.Track, error) {
 	return &track, nil
 }
 
-func (spot *api) GetTrackByMatch(iden db.ResourceIdentifier) (*db.Track, error) {
+func (spot *api) GetTrackByMatch(iden string) (*db.Track, error) {
 	// perform a search to obtain id of the desired track
-	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
+	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -260,8 +260,8 @@ func (spot *api) GetArtistById(id string, discogFillLevel int) (*db.Artist, erro
 	return &artist, nil
 }
 
-func (spot *api) GetArtistByMatch(iden db.ResourceIdentifier, discogFillLevel int) (*db.Artist, error) {
-	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
+func (spot *api) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist, error) {
+	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
 	}
@@ -291,8 +291,8 @@ func (spot *api) GetAlbumById(id string) (*db.Album, error) {
 	return &album, nil
 }
 
-func (spot *api) GetAlbumByMatch(iden db.ResourceIdentifier) (*db.Album, error) {
-	search, err := spot.Search(iden.Artist+" "+iden.Title, 1)
+func (spot *api) GetAlbumByMatch(iden string) (*db.Album, error) {
+	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
 	}

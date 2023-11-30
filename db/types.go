@@ -486,17 +486,12 @@ func (album *Album) FillTracklist(provider ResourceProvider) error {
 	return nil
 }
 
-// used to search for an artist, album, or track by name
-type ResourceIdentifier struct {
-	Title, Artist string
-}
-
 type ResourceProvider interface {
 	GetTrackById(string) (*Track, error)
-	GetTrackByMatch(ResourceIdentifier) (*Track, error)
+	GetTrackByMatch(string) (*Track, error)
 
 	GetAlbumById(string) (*Album, error)
-	GetAlbumByMatch(ResourceIdentifier) (*Album, error)
+	GetAlbumByMatch(string) (*Album, error)
 
 	// The second "int" argument in the next two methods denotes
 	// whether a discography should be provided when fetching an artist.
@@ -510,7 +505,7 @@ type ResourceProvider interface {
 	// and their respective filled out tracklists despite specifying
 	// GetArtistByMatch(..., 1)
 	GetArtistById(string, int) (*Artist, error)
-	GetArtistByMatch(ResourceIdentifier, int) (*Artist, error)
+	GetArtistByMatch(string, int) (*Artist, error)
 
 	GetArtistDiscography(*Artist, []AlbumType) ([]Album, error)
 	GetAlbumTracklist(*Album) ([]Track, error)

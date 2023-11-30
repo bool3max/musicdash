@@ -332,15 +332,15 @@ func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
 	return tracklist, nil
 }
 
-func (db *db) GetAlbumByMatch(iden ResourceIdentifier) (*Album, error) {
+func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
 	return nil, nil
 }
 
-func (db *db) GetArtistByMatch(iden ResourceIdentifier, discogFillLevel int) (*Artist, error) {
+func (db *db) GetArtistByMatch(iden string, discogFillLevel int) (*Artist, error) {
 	return nil, nil
 }
 
-func (db *db) GetTrackByMatch(iden ResourceIdentifier) (*Track, error) {
+func (db *db) GetTrackByMatch(iden string) (*Track, error) {
 	return nil, nil
 }
 

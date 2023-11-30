@@ -20,7 +20,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	rolling_stones, err := spot.GetAlbumByMatch(db.ResourceIdentifier{Title: "lady gaga the fame monster"})
+	rolling_stones, err := spot.GetAlbumByMatch("lady gaga the fame monster")
 	if err != nil {
 		log.Fatal(err)
 	}
@@ -53,7 +53,7 @@ func preserve_some_artists() {
 	}
 
 	for _, artistName := range []string{"Drake", "Lady Gaga", "Kanye West", "Ping Floyd"} {
-		artist, err := spot.GetArtistByMatch(db.ResourceIdentifier{Artist: artistName}, 2)
+		artist, err := spot.GetArtistByMatch(artistName, 2)
 		if err != nil {
 			log.Fatal(err)
 		}
