@@ -25,6 +25,13 @@ type Resource interface {
 	Preserve(context.Context, *pgxpool.Pool, bool) error
 }
 
+type Image struct {
+	Width, Height int
+	MimeType      string
+	SpotifyId     string
+	Data          []byte
+}
+
 type Track struct {
 	Title             string
 	Duration          time.Duration
@@ -234,8 +241,6 @@ func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse 
 
 	// preserve the Artist's entire discography if told to recurse
 	if recurse {
-		// if artist.Discography is not populated (i.e. is nil)
-		// this range simply won't be performed
 		for _, album := range artist.Discography {
 			albumPreserved, err := album.IsPreserved(ctx, pool)
 			if err != nil {
