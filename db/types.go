@@ -123,6 +123,9 @@ type Track struct {
 	Album             Album
 	Artists           []Artist
 	SpotifyId         string
+	Isrc              string
+	Ean               string
+	Upc               string
 	SpotifyURI        string
 	SpotifyPopularity int
 }
@@ -138,8 +141,8 @@ type Track struct {
 func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQueryBaseInfo := `
 		insert into spotify_track
-		(spotifyid, title, duration, tracklistnum, explicit, popularity, spotifyuri)	
-		values ($1, $2, $3, $4, $5, $6, $7)
+		(spotifyid, title, duration, tracklistnum, explicit, popularity, spotifyuri, isrc, ean, upc)	
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict on constraint track_pk do update
 		set title = $2, duration = $3, tracklistnum = $4, explicit = $5, popularity = $6, spotifyuri = $7
 	`
@@ -154,6 +157,9 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		track.IsExplicit,
 		track.SpotifyPopularity,
 		track.SpotifyURI,
+		track.Isrc,
+		track.Ean,
+		track.Upc,
 	)
 
 	if err != nil {

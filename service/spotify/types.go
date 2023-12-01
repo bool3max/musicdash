@@ -8,18 +8,25 @@ import (
 // objects returned by the spotify API that are eventually converted to "real" application
 // objects used throughout the application
 
+type external_ids struct {
+	Isrc string `json:"isrc"`
+	Ean  string `json:"ean"`
+	Upc  string `json:"upc"`
+}
+
 // a resource returned by the Spotify API that can be converted
 // into a "real" database resource
 type track struct {
-	Id         string
-	Name       string
-	Album      album
-	Artists    []artist
-	SpotifyURI string `json:"uri"`
-	DurationMS int    `json:"duration_ms"`
-	TrackNum   int    `json:"track_number"`
-	Explicit   bool   `json:"explicit"`
-	Popularity int
+	Id          string
+	Name        string
+	Album       album
+	Artists     []artist
+	SpotifyURI  string `json:"uri"`
+	DurationMS  int    `json:"duration_ms"`
+	TrackNum    int    `json:"track_number"`
+	Explicit    bool   `json:"explicit"`
+	Popularity  int
+	ExternalIds external_ids `json:"external_ids"`
 }
 
 func (track track) toDB() db.Track {
@@ -36,6 +43,9 @@ func (track track) toDB() db.Track {
 		Album:             track.Album.toDB(),
 		Artists:           dbArtists,
 		SpotifyId:         track.Id,
+		Ean:               track.ExternalIds.Ean,
+		Isrc:              track.ExternalIds.Isrc,
+		Upc:               track.ExternalIds.Upc,
 		SpotifyURI:        track.SpotifyURI,
 		SpotifyPopularity: track.Popularity,
 	}
@@ -143,7 +153,7 @@ func (image image) toDB(spotifyId string) db.Image {
 // .Get<Resource>By<IdentityType>
 // Search() should be used when a non-specific resource is being looked for,
 // or when an ID of a specific resoure is required in order to obtain its
-// full version
+// complete version
 type Search struct {
 	Albums  []db.Album
 	Tracks  []db.Track
