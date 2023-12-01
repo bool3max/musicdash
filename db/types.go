@@ -358,6 +358,9 @@ type Album struct {
 	Tracks      []Track
 	Images      []Image
 	ReleaseDate time.Time
+	Isrc        string
+	Ean         string
+	Upc         string
 	SpotifyId   string
 	SpotifyURI  string
 	Type        AlbumType
