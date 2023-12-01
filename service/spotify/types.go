@@ -126,6 +126,9 @@ func (album album) toDB() db.Album {
 		Images:      dbImages,
 		SpotifyId:   album.Id,
 		SpotifyURI:  album.SpotifyURI,
+		Isrc:        album.ExternalIds.Isrc,
+		Ean:         album.ExternalIds.Ean,
+		Upc:         album.ExternalIds.Upc,
 		Type:        albumType,
 	}
 }

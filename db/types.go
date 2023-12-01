@@ -369,8 +369,8 @@ type Album struct {
 func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQueryBaseInfo := `
 		insert into spotify_album
-		(spotifyid, title, counttracks, releasedate, type, spotifyuri)
-		values ($1, $2, $3, $4, $5, $6)
+		(spotifyid, title, counttracks, releasedate, type, spotifyuri, isrc, ean, upc)
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict on constraint album_pk do update
 		set title = $2, counttracks = $3, releasedate = $4, type = $5, spotifyuri = $6
 	`
@@ -384,6 +384,9 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		album.ReleaseDate,
 		album.Type,
 		album.SpotifyURI,
+		album.Isrc,
+		album.Ean,
+		album.Upc,
 	)
 
 	if err != nil {
