@@ -225,6 +225,24 @@ func (spot *api) GetTrackById(id string) (*db.Track, error) {
 	return &track, nil
 }
 
+func (spot *api) GetSeveralTracksById(ids []string) ([]db.Track, error) {
+	requestUrl := endpointTrack + "?" + url.Values{"ids": {strings.Join(ids, ",")}}.Encode()
+	var result struct {
+		Tracks []track `json:"tracks"`
+	}
+	err := spot.jsonGetHelper(requestUrl, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	dbTracks := make([]db.Track, len(ids))
+	for trackIdx, track := range result.Tracks {
+		dbTracks[trackIdx] = track.toDB()
+	}
+
+	return dbTracks, nil
+}
+
 func (spot *api) GetTrackByMatch(iden string) (*db.Track, error) {
 	// perform a search to obtain id of the desired track
 	search, err := spot.Search(iden, 1)

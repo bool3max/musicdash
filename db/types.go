@@ -494,6 +494,7 @@ func (album *Album) FillTracklist(provider ResourceProvider) error {
 
 type ResourceProvider interface {
 	GetTrackById(string) (*Track, error)
+	GetSeveralTracksById([]string) ([]Track, error)
 	GetTrackByMatch(string) (*Track, error)
 
 	GetAlbumById(string) (*Album, error)
