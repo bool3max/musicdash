@@ -5,17 +5,12 @@ import (
 	"time"
 )
 
-// objects returned by the spotify API that are eventually converted to "real" application
-// objects used throughout the application
-
 type external_ids struct {
 	Isrc string `json:"isrc"`
 	Ean  string `json:"ean"`
 	Upc  string `json:"upc"`
 }
 
-// a resource returned by the Spotify API that can be converted
-// into a "real" database resource
 type track struct {
 	Id          string
 	Name        string
