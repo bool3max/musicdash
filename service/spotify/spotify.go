@@ -366,6 +366,11 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.Albu
 // Given an Album, return all of its tracks. This method is necessary
 // considering that sometimes db.Album objects won't have their .Tracks[]
 // filled, for example if they came from db.Artist.FillDiscography(), etc...
+// The Spotify Web API's /albums/<id>/tracks *does* return info about each track
+// on the album, but in the form of a SimplifiedTrackObject. For that reason,
+// here we perform two requests: one to collect Spotify IDs of all the tracks on the album
+// and another to collect detailed info about each of the tracks using the dedicated
+// /tracks endpoint.
 func (spot *api) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
 	var response struct {
 		Items []track
@@ -385,11 +390,15 @@ func (spot *api) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
 		return nil, err
 	}
 
-	// convert all spotify.track to db.Track
-	converted := make([]db.Track, len(response.Items))
+	tracklistIds := make([]string, len(response.Items))
 	for idx, track := range response.Items {
-		converted[idx] = track.toDB()
+		tracklistIds[idx] = track.Id
 	}
 
-	return converted, nil
+	albumTracks, err := spot.GetSeveralTracksById(tracklistIds)
+	if err != nil {
+		return []db.Track{}, err
+	}
+
+	return albumTracks, nil
 }
