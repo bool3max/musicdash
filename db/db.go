@@ -107,6 +107,19 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	return track, nil
 }
 
+func (db *db) GetSeveralTracksById(ids []string) ([]Track, error) {
+	tracks := make([]Track, len(ids))
+	for idx, trackId := range ids {
+		track, err := db.GetTrackById(trackId)
+		if err != nil {
+			return []Track{}, err
+		}
+		tracks[idx] = *track
+	}
+
+	return tracks, nil
+}
+
 func (db *db) GetAlbumById(albumId string) (*Album, error) {
 	album := new(Album)
 	album.SpotifyId = albumId
