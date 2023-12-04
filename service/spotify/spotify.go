@@ -373,12 +373,13 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.Albu
 		return nil, err
 	}
 
-	converted := make([]db.Album, len(response.Items))
-	for idx, album := range response.Items {
-		converted[idx] = album.toDB()
+	// collect ids of all albums in discography to slice
+	albumIds := make([]string, len(response.Items))
+	for albumIdx, album := range response.Items {
+		albumIds[albumIdx] = album.Id
 	}
 
-	return converted, nil
+	return spot.GetSeveralAlbumsById(albumIds)
 }
 
 // Given an Album, return all of its tracks. This method is necessary
@@ -388,7 +389,7 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.Albu
 // on the album, but in the form of a SimplifiedTrackObject. For that reason,
 // here we perform two requests: one to collect Spotify IDs of all the tracks on the album
 // and another to collect detailed info about each of the tracks using the dedicated
-// /tracks endpoint.
+// /tracks endpoint and the spotify id(s) from the first request.
 func (spot *api) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
 	var response struct {
 		Items []track
