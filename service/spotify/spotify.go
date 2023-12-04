@@ -143,48 +143,6 @@ func (spot *api) jsonGetHelper(uri string, decodeTo any) error {
 	return nil
 }
 
-// helper function for retrieving a resource from the Spotify API
-// based on its spotify ID. resourceType should be one of:
-// "track", "album", "artist"
-func (spot *api) getResource(resourceType, spotifyId string) (any, error) {
-
-	// determine which endpoint url to use based on type of desired resource
-	var endpoint string
-	switch resourceType {
-	case "track":
-		endpoint = endpointTrack
-	case "album":
-		endpoint = endpointAlbum
-	case "artist":
-		endpoint = endpointArtist
-	}
-
-	var resourcePtr any
-	switch resourceType {
-	case "track":
-		resourcePtr = &track{}
-	case "artist":
-		resourcePtr = &artist{}
-	case "album":
-		resourcePtr = &album{}
-	}
-
-	if err := spot.jsonGetHelper(endpoint+spotifyId, resourcePtr); err != nil {
-		return nil, err
-	}
-
-	switch t := resourcePtr.(type) {
-	case *track:
-		return t.toDB(), nil
-	case *artist:
-		return t.toDB(), nil
-	case *album:
-		return t.toDB(), nil
-	default:
-		return nil, errors.New("invalid resource type")
-	}
-}
-
 func (spot *api) Search(query string, limit int) (Search, error) {
 	searchQuery := url.Values{
 		"q":     {url.QueryEscape(query)},
@@ -216,13 +174,14 @@ func (spot *api) Search(query string, limit int) (Search, error) {
 }
 
 func (spot *api) GetTrackById(id string) (*db.Track, error) {
-	resource, err := spot.getResource("track", id)
-	if err != nil {
+	var track track
+	if err := spot.jsonGetHelper(endpointTrack+id, &track); err != nil {
 		return nil, err
 	}
 
-	track := resource.(db.Track)
-	return &track, nil
+	dbTrack := track.toDB()
+
+	return &dbTrack, nil
 }
 
 func (spot *api) GetSeveralTracksById(ids []string) ([]db.Track, error) {
@@ -252,30 +211,24 @@ func (spot *api) GetTrackByMatch(iden string) (*db.Track, error) {
 
 	firstResultId := search.Tracks[0].SpotifyId
 
-	resource, err := spot.getResource("track", firstResultId)
-	if err != nil {
-		return nil, err
-	}
-
-	track := resource.(db.Track)
-	return &track, nil
+	return spot.GetTrackById(firstResultId)
 }
 
 func (spot *api) GetArtistById(id string, discogFillLevel int) (*db.Artist, error) {
-	resource, err := spot.getResource("artist", id)
-	if err != nil {
+	var artist artist
+	if err := spot.jsonGetHelper(endpointArtist+id, &artist); err != nil {
 		return nil, err
 	}
 
-	artist := resource.(db.Artist)
+	dbArtist := artist.toDB()
 
 	if discogFillLevel > 0 {
-		if err := artist.FillDiscography(spot, discogFillLevel > 1); err != nil {
+		if err := dbArtist.FillDiscography(spot, discogFillLevel > 1); err != nil {
 			return nil, err
 		}
 	}
 
-	return &artist, nil
+	return &dbArtist, nil
 }
 
 func (spot *api) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist, error) {
@@ -285,28 +238,23 @@ func (spot *api) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist,
 	}
 
 	firstResultId := search.Artists[0].SpotifyId
-	resource, err := spot.getResource("artist", firstResultId)
+	artist, err := spot.GetArtistById(firstResultId, discogFillLevel)
 	if err != nil {
 		return nil, err
 	}
 
-	artist := resource.(db.Artist)
-	if discogFillLevel > 0 {
-		if err := artist.FillDiscography(spot, discogFillLevel > 1); err != nil {
-			return nil, err
-		}
-	}
-	return &artist, nil
+	return artist, nil
 }
 
 func (spot *api) GetAlbumById(id string) (*db.Album, error) {
-	resource, err := spot.getResource("album", id)
-	if err != nil {
+	var album album
+	if err := spot.jsonGetHelper(endpointAlbum+id, &album); err != nil {
 		return nil, err
 	}
 
-	album := resource.(db.Album)
-	return &album, nil
+	dbAlbum := album.toDB()
+
+	return &dbAlbum, nil
 }
 
 func (spot *api) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
@@ -335,13 +283,7 @@ func (spot *api) GetAlbumByMatch(iden string) (*db.Album, error) {
 
 	firstResultId := search.Albums[0].SpotifyId
 
-	resource, err := spot.getResource("album", firstResultId)
-	if err != nil {
-		return nil, err
-	}
-
-	album := resource.(db.Album)
-	return &album, nil
+	return spot.GetAlbumById(firstResultId)
 }
 
 // Given an Artist, return their complete discography. This is necessary given
