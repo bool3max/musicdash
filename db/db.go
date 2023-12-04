@@ -42,9 +42,9 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	row := db.pool.QueryRow(
 		context.TODO(),
 		`
-		select title, duration, tracklistnum, popularity, spotifyuri, explicit
-		from spotify_track		
-		where spotifyid=$1
+			select title, duration, tracklistnum, popularity, spotifyuri, explicit
+			from spotify_track		
+			where spotifyid=$1
 		`,
 		trackId,
 	)
@@ -358,16 +358,80 @@ func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
 	return tracklist, nil
 }
 
+// Get<Resource>ByMatch methods of the "db" resource provider search exclusively
+// based on the name of the resource being searched for, whereas the same methods
+// of the Spotify provider search the entire spotify catalog (using its /search endpoint)
+// and return the first result of the requested type
 func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
-	return nil, nil
+	sqlQuerySearch := `
+		select spotifyid
+		from spotify_album
+		order by levenshtein($1, title)
+		limit 1
+	`
+
+	row := db.pool.QueryRow(
+		context.TODO(),
+		sqlQuerySearch,
+		iden,
+	)
+
+	var spotifyId string
+	err := row.Scan(&spotifyId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetAlbumById(spotifyId)
 }
 
 func (db *db) GetArtistByMatch(iden string, discogFillLevel int) (*Artist, error) {
-	return nil, nil
+	sqlQuerySearch := `
+		select spotifyid
+		from spotify_artist
+		order by levenshtein($1, name)
+		limit 1
+	`
+
+	row := db.pool.QueryRow(
+		context.TODO(),
+		sqlQuerySearch,
+		iden,
+	)
+
+	var spotifyId string
+	err := row.Scan(&spotifyId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetArtistById(spotifyId, discogFillLevel)
 }
 
 func (db *db) GetTrackByMatch(iden string) (*Track, error) {
-	return nil, nil
+	sqlQuerySearch := `
+		select spotifyid
+		from spotify_track
+		order by levenshtein($1, title)
+		limit 1
+	`
+
+	row := db.pool.QueryRow(
+		context.TODO(),
+		sqlQuerySearch,
+		iden,
+	)
+
+	var spotifyId string
+	err := row.Scan(&spotifyId)
+
+	if err != nil {
+		return nil, err
+	}
+
+	return db.GetTrackById(spotifyId)
 }
 
 func New() (*db, error) {

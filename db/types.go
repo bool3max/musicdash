@@ -29,7 +29,7 @@ type Resource interface {
 	Preserve(context.Context, *pgxpool.Pool, bool) error
 }
 
-// A visual representation of a Spotify resource identified by its Spotify ID.
+// A visual representation of a Spotify resource identified by a Spotify ID.
 // Image.Data[] stores binary data of the image and may be empty (nil) if the
 // image hasn't yet been downloaded. Image.Download() downloads the image
 // data and populates Image.Data[] and Image.MimeType. Preserving the image
@@ -88,8 +88,7 @@ func (img *Image) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, er
 
 func (img *Image) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	if img.Data == nil {
-		err := img.Download()
-		if err != nil {
+		if err := img.Download(); err != nil {
 			return err
 		}
 	}
