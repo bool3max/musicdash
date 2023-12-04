@@ -230,6 +230,19 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 	return album, nil
 }
 
+func (db *db) GetSeveralAlbumsById(ids []string) ([]Album, error) {
+	albums := make([]Album, len(ids))
+	for idx, albumId := range ids {
+		track, err := db.GetAlbumById(albumId)
+		if err != nil {
+			return []Album{}, err
+		}
+		albums[idx] = *track
+	}
+
+	return albums, nil
+}
+
 func (db *db) GetArtistById(artistId string, discogFillLevel int) (*Artist, error) {
 	artist := new(Artist)
 	artist.SpotifyId = artistId

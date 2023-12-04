@@ -144,7 +144,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		(spotifyid, title, duration, tracklistnum, explicit, popularity, spotifyuri, isrc, ean, upc)	
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict on constraint track_pk do update
-		set title = $2, duration = $3, tracklistnum = $4, explicit = $5, popularity = $6, spotifyuri = $7
+		set title = $2, duration = $3, tracklistnum = $4, explicit = $5, popularity = $6, spotifyuri = $7, isrc = $8, ean = $9, upc = $10
 	`
 
 	_, err := pool.Exec(
@@ -372,7 +372,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		(spotifyid, title, counttracks, releasedate, type, spotifyuri, isrc, ean, upc)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict on constraint album_pk do update
-		set title = $2, counttracks = $3, releasedate = $4, type = $5, spotifyuri = $6
+		set title = $2, counttracks = $3, releasedate = $4, type = $5, spotifyuri = $6, isrc = $7, ean = $8, upc = $9
 	`
 
 	_, err := pool.Exec(
@@ -504,6 +504,7 @@ type ResourceProvider interface {
 	GetTrackByMatch(string) (*Track, error)
 
 	GetAlbumById(string) (*Album, error)
+	GetSeveralAlbumsById([]string) ([]Album, error)
 	GetAlbumByMatch(string) (*Album, error)
 
 	// The second "int" argument in the next two methods denotes

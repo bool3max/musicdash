@@ -309,6 +309,24 @@ func (spot *api) GetAlbumById(id string) (*db.Album, error) {
 	return &album, nil
 }
 
+func (spot *api) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
+	requestUrl := endpointAlbum + "?" + url.Values{"ids": {strings.Join(ids, ",")}}.Encode()
+	var result struct {
+		Albums []album `json:"albums"`
+	}
+	err := spot.jsonGetHelper(requestUrl, &result)
+	if err != nil {
+		return nil, err
+	}
+
+	dbAlbums := make([]db.Album, len(ids))
+	for albumIdx, album := range result.Albums {
+		dbAlbums[albumIdx] = album.toDB()
+	}
+
+	return dbAlbums, nil
+}
+
 func (spot *api) GetAlbumByMatch(iden string) (*db.Album, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
