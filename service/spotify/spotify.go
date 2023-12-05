@@ -1,4 +1,5 @@
-// the spotify package deals with interaction with the Spotify api
+// The spotify package defines the Spotify ResourceProvider which obtains
+// data from the Spotify Web API, as well as some constants.
 package spotify
 
 import (
@@ -26,14 +27,14 @@ type apiAccessToken struct {
 	Expires_in   int    `json:"expires_in"`
 }
 
-type spotifyAuth struct {
+type apiAuth struct {
 	client_id, client_secret string
 	token                    string
 	validUntil               time.Time
 	authHeader               string
 }
 
-func (auth *spotifyAuth) refresh() error {
+func (auth *apiAuth) refresh() error {
 	requestFormData := url.Values{
 		"grant_type":    {"client_credentials"},
 		"client_id":     {auth.client_id},
@@ -76,14 +77,14 @@ func (auth *spotifyAuth) refresh() error {
 	return nil
 }
 
-type api struct {
+type spotify struct {
 	// authentication information of the current client
-	auth spotifyAuth
+	auth apiAuth
 }
 
 // returns whether a refresh was attempted, and an error if the refresh failed or not
 // if a refresh hasnt been attempted error is always nil
-func (spot *api) validateToken() (bool, error) {
+func (spot *spotify) validateToken() (bool, error) {
 	if time.Now().After(spot.auth.validUntil) {
 		// current token has expired, refresh
 		if err := spot.auth.refresh(); err != nil {
@@ -97,8 +98,8 @@ func (spot *api) validateToken() (bool, error) {
 }
 
 // Create and return a new pre-authenticated SpotifyAPI instance.
-func NewAPI(client_id, client_secret string) (*api, error) {
-	spot := &api{}
+func NewAPI(client_id, client_secret string) (*spotify, error) {
+	spot := &spotify{}
 
 	spot.auth.client_id = client_id
 	spot.auth.client_secret = client_secret
@@ -111,7 +112,7 @@ func NewAPI(client_id, client_secret string) (*api, error) {
 	return spot, nil
 }
 
-func (spot *api) jsonGetHelper(uri string, decodeTo any) error {
+func (spot *spotify) jsonGetHelper(uri string, decodeTo any) error {
 	// validate current access token
 	if _, err := spot.validateToken(); err != nil {
 		// current token expired but revalidation failed
@@ -143,7 +144,7 @@ func (spot *api) jsonGetHelper(uri string, decodeTo any) error {
 	return nil
 }
 
-func (spot *api) Search(query string, limit int) (Search, error) {
+func (spot *spotify) Search(query string, limit int) (Search, error) {
 	searchQuery := url.Values{
 		"q":     {url.QueryEscape(query)},
 		"limit": {strconv.Itoa(limit)},
@@ -157,7 +158,7 @@ func (spot *api) Search(query string, limit int) (Search, error) {
 		return Search{}, err
 	}
 
-	search := Search{}
+	var search Search
 	for _, track := range searchResults.Tracks.Items {
 		search.Tracks = append(search.Tracks, track.toDB())
 	}
@@ -173,7 +174,7 @@ func (spot *api) Search(query string, limit int) (Search, error) {
 	return search, nil
 }
 
-func (spot *api) GetTrackById(id string) (*db.Track, error) {
+func (spot *spotify) GetTrackById(id string) (*db.Track, error) {
 	var track track
 	if err := spot.jsonGetHelper(endpointTrack+id, &track); err != nil {
 		return nil, err
@@ -184,7 +185,7 @@ func (spot *api) GetTrackById(id string) (*db.Track, error) {
 	return &dbTrack, nil
 }
 
-func (spot *api) GetSeveralTracksById(ids []string) ([]db.Track, error) {
+func (spot *spotify) GetSeveralTracksById(ids []string) ([]db.Track, error) {
 	requestUrl := endpointTrack + "?" + url.Values{"ids": {strings.Join(ids, ",")}}.Encode()
 	var result struct {
 		Tracks []track `json:"tracks"`
@@ -202,7 +203,7 @@ func (spot *api) GetSeveralTracksById(ids []string) ([]db.Track, error) {
 	return dbTracks, nil
 }
 
-func (spot *api) GetTrackByMatch(iden string) (*db.Track, error) {
+func (spot *spotify) GetTrackByMatch(iden string) (*db.Track, error) {
 	// perform a search to obtain id of the desired track
 	search, err := spot.Search(iden, 1)
 	if err != nil {
@@ -214,7 +215,7 @@ func (spot *api) GetTrackByMatch(iden string) (*db.Track, error) {
 	return spot.GetTrackById(firstResultId)
 }
 
-func (spot *api) GetArtistById(id string, discogFillLevel int) (*db.Artist, error) {
+func (spot *spotify) GetArtistById(id string, discogFillLevel int) (*db.Artist, error) {
 	var artist artist
 	if err := spot.jsonGetHelper(endpointArtist+id, &artist); err != nil {
 		return nil, err
@@ -231,7 +232,7 @@ func (spot *api) GetArtistById(id string, discogFillLevel int) (*db.Artist, erro
 	return &dbArtist, nil
 }
 
-func (spot *api) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist, error) {
+func (spot *spotify) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
@@ -246,7 +247,7 @@ func (spot *api) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist,
 	return artist, nil
 }
 
-func (spot *api) GetAlbumById(id string) (*db.Album, error) {
+func (spot *spotify) GetAlbumById(id string) (*db.Album, error) {
 	var album album
 	if err := spot.jsonGetHelper(endpointAlbum+id, &album); err != nil {
 		return nil, err
@@ -257,7 +258,7 @@ func (spot *api) GetAlbumById(id string) (*db.Album, error) {
 	return &dbAlbum, nil
 }
 
-func (spot *api) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
+func (spot *spotify) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
 	requestUrl := endpointAlbum + "?" + url.Values{"ids": {strings.Join(ids, ",")}}.Encode()
 	var result struct {
 		Albums []album `json:"albums"`
@@ -275,7 +276,7 @@ func (spot *api) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
 	return dbAlbums, nil
 }
 
-func (spot *api) GetAlbumByMatch(iden string) (*db.Album, error) {
+func (spot *spotify) GetAlbumByMatch(iden string) (*db.Album, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
@@ -291,7 +292,7 @@ func (spot *api) GetAlbumByMatch(iden string) (*db.Album, error) {
 // includeGroups specifies types of albums to include in the response and can contain
 // any of the following, at most once: album, single, appears_on, compilation
 // If includeGroups is nil, {"album"} is assumed
-func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.AlbumType) ([]db.Album, error) {
+func (spot *spotify) GetArtistDiscography(artist *db.Artist, includeGroups []db.AlbumType) ([]db.Album, error) {
 	if includeGroups == nil {
 		includeGroups = []db.AlbumType{db.AlbumRegular}
 	}
@@ -332,7 +333,7 @@ func (spot *api) GetArtistDiscography(artist *db.Artist, includeGroups []db.Albu
 // here we perform two requests: one to collect Spotify IDs of all the tracks on the album
 // and another to collect detailed info about each of the tracks using the dedicated
 // /tracks endpoint and the spotify id(s) from the first request.
-func (spot *api) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
+func (spot *spotify) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
 	var response struct {
 		Items []track
 
