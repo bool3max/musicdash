@@ -82,8 +82,8 @@ type spotify struct {
 	auth apiAuth
 }
 
-// returns whether a refresh was attempted, and an error if the refresh failed or not
-// if a refresh hasnt been attempted error is always nil
+// Returns a bool indicating whether a refresh was attempted, and an error if the refresh failed or not.
+// If a refresh hasnt been attempted error is always nil.
 func (spot *spotify) validateToken() (bool, error) {
 	if time.Now().After(spot.auth.validUntil) {
 		// current token has expired, refresh
