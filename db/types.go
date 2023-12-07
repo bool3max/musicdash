@@ -30,12 +30,12 @@ type Resource interface {
 }
 
 // A visual representation of a Spotify resource identified by a Spotify ID.
-// Image.Data[] stores binary data of the image and may be empty (nil) if the
-// image hasn't yet been downloaded. Image.Download() downloads the image
-// data and populates Image.Data[] and Image.MimeType. Preserving the image
-// with Image.Preserve() downloads the image beforehand, if it hasn't already
+// MusicImage.Data[] stores binary data of the image and may be empty (nil) if the
+// image hasn't yet been downloaded. MusicImage.Download() downloads the image
+// data and populates MusicImage.Data[] and MusicImage.MimeType. Preserving the image
+// with MusicImage.Preserve() downloads the image beforehand, if it hasn't already
 // been downloaded.
-type Image struct {
+type MusicImage struct {
 	Width, Height int
 	MimeType      string
 	SpotifyId     string
@@ -45,7 +45,7 @@ type Image struct {
 
 // Download binary image data from img.Url and store it in img.Data.
 // Stores the MimeType of the binary data in img.MimeType.
-func (img *Image) Download() error {
+func (img *MusicImage) Download() error {
 	resp, err := http.Get(img.Url)
 	if err != nil {
 		return err
@@ -62,7 +62,7 @@ func (img *Image) Download() error {
 	return nil
 }
 
-func (img *Image) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
+func (img *MusicImage) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
 	row := pool.QueryRow(
 		ctx,
 		`
@@ -86,7 +86,7 @@ func (img *Image) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, er
 	}
 }
 
-func (img *Image) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
+func (img *MusicImage) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	if img.Data == nil {
 		if err := img.Download(); err != nil {
 			return err
@@ -262,7 +262,7 @@ func (track *Track) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, 
 type Artist struct {
 	Name                 string
 	Discography          []Album
-	Images               []Image
+	Images               []MusicImage
 	SpotifyId            string
 	SpotifyURI           string
 	SpotifyFollowerCount int
@@ -355,7 +355,7 @@ type Album struct {
 	CountTracks int
 	Artists     []Artist
 	Tracks      []Track
-	Images      []Image
+	Images      []MusicImage
 	ReleaseDate time.Time
 	Isrc        string
 	Ean         string
@@ -502,6 +502,9 @@ type ResourceProvider interface {
 	GetSeveralTracksById([]string) ([]Track, error)
 	GetTrackByMatch(string) (*Track, error)
 
+	// Getting an album by whatever method never fills in its tracklist.
+	// In order to obtain a tracklist, use either ResourceProvider.GetAlbumTracklist()
+	// or db.Album.FillTracklist().
 	GetAlbumById(string) (*Album, error)
 	GetSeveralAlbumsById([]string) ([]Album, error)
 	GetAlbumByMatch(string) (*Album, error)
