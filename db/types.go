@@ -67,7 +67,7 @@ func (img *MusicImage) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (boo
 		ctx,
 		`
 			select url
-			from spotify_images
+			from spotify.images
 			where url=$1 and spotifyid=$2 and width=$3 and height=$4
 		`,
 		img.Url, img.SpotifyId, img.Width, img.Height,
@@ -94,7 +94,7 @@ func (img *MusicImage) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse
 	}
 
 	sqlQueryImg := `
-		insert into spotify_images
+		insert into spotify.images
 		(spotifyid, url, width, height, data, mimetype)	
 		values
 		($1, $2, $3, $4, $5, $6)
@@ -139,7 +139,7 @@ type Track struct {
 //     preserving any belonging albums that aren't preserved
 func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQueryBaseInfo := `
-		insert into spotify_track
+		insert into spotify.track
 		(spotifyid, title, duration, tracklistnum, explicit, popularity, spotifyuri, isrc, ean, upc)	
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		on conflict on constraint track_pk do update
@@ -167,7 +167,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 
 	// perserve the performing artists
 	sqlQueryPerformingArtist := `
-		insert into spotify_track_artist
+		insert into spotify.track_artist
 		(spotifyidtrack, spotifyidartist, ismain)	
 		values ($1, $2, $3)
 		on conflict on constraint track_artist_pk do nothing
@@ -204,7 +204,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 	}
 
 	sqlQueryBelongingAlbum := `
-		insert into spotify_track_album
+		insert into spotify.track_album
 		(spotifyidtrack, spotifyidalbum)
 		values ($1, $2)
 		on conflict on constraint track_album_pk do nothing
@@ -244,7 +244,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 }
 
 func (track *Track) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
-	row := pool.QueryRow(ctx, "select spotifyid from spotify_track where spotifyid=$1", track.SpotifyId)
+	row := pool.QueryRow(ctx, "select spotifyid from spotify.track where spotifyid=$1", track.SpotifyId)
 
 	var id string
 	err := row.Scan(&id)
@@ -290,7 +290,7 @@ func (artist *Artist) FillDiscography(provider ResourceProvider, fillTracklists 
 }
 
 func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
-	row := pool.QueryRow(ctx, "select spotifyid from spotify_artist where spotifyid=$1", artist.SpotifyId)
+	row := pool.QueryRow(ctx, "select spotifyid from spotify.artist where spotifyid=$1", artist.SpotifyId)
 
 	var id string
 	err := row.Scan(&id)
@@ -307,7 +307,7 @@ func (artist *Artist) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool
 
 func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQuery := `
-		insert into spotify_artist
+		insert into spotify.artist
 		(spotifyid, name, spotifyuri, followers) 
 		values ($1, $2, $3, $4)
 		on conflict on constraint artist_pk do update
@@ -367,7 +367,7 @@ type Album struct {
 
 func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQueryBaseInfo := `
-		insert into spotify_album
+		insert into spotify.album
 		(spotifyid, title, counttracks, releasedate, type, spotifyuri, isrc, ean, upc)
 		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 		on conflict on constraint album_pk do update
@@ -393,7 +393,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 	}
 
 	sqlQueryPerformingArtist := `
-		insert into spotify_album_artist
+		insert into spotify.album_artist
 		(spotifyidartist, spotifyidalbum, ismain)
 		values ($1, $2, $3)
 		on conflict on constraint album_artist_pk do nothing
@@ -448,7 +448,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 			// for the newly inserted track
 
 			sqlQueryTrackAlbumRelation := `
-				insert into spotify_track_album
+				insert into spotify.track_album
 				(spotifyidtrack, spotifyidalbum)
 				values ($1, $2)
 				on conflict on constraint track_album_pk do nothing
@@ -472,7 +472,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 }
 
 func (album *Album) IsPreserved(ctx context.Context, pool *pgxpool.Pool) (bool, error) {
-	row := pool.QueryRow(ctx, "select spotifyid from spotify_album where spotifyid=$1", album.SpotifyId)
+	row := pool.QueryRow(ctx, "select spotifyid from spotify.album where spotifyid=$1", album.SpotifyId)
 
 	var id string
 	err := row.Scan(&id)

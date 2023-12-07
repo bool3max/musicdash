@@ -43,7 +43,7 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 		context.TODO(),
 		`
 			select title, duration, tracklistnum, popularity, spotifyuri, explicit, isrc
-			from spotify_track		
+			from spotify.track		
 			where spotifyid=$1
 		`,
 		trackId,
@@ -77,7 +77,7 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 		context.TODO(),
 		`
 			select spotifyidalbum
-			from spotify_track_album
+			from spotify.track_album
 			where spotifyidtrack=$1
 			limit 1
 		`,
@@ -99,10 +99,10 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	// spotify ids of all artists on the track, main artist first
 	sqlQueryTrackArtists := `
 		select spotifyidartist
-		from spotify_track
-			inner join spotify_track_artist on (spotify_track.spotifyid=spotify_track_artist.spotifyidtrack)
+		from spotify.track
+			inner join spotify.track_artist on (spotify.track.spotifyid=spotify.track_artist.spotifyidtrack)
 		where spotifyid=$1
-		order by spotify_track_artist.ismain desc
+		order by spotify.track_artist.ismain desc
 	`
 
 	rows, err := db.pool.Query(
@@ -151,7 +151,7 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 
 	sqlQueryBaseInfo := `
 		select title, counttracks, releasedate, spotifyuri, type, upc
-		from spotify_album	
+		from spotify.album	
 		where spotifyid=$1
 	`
 
@@ -191,7 +191,7 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 	// spotify ids of all album artists, main artist first
 	sqlQueryAlbumArtists := `
 		select spotifyidartist 
-		from spotify_album_artist
+		from spotify.album_artist
 		where spotifyidalbum=$1
 		order by ismain desc
 	`
@@ -241,7 +241,7 @@ func (db *db) GetArtistById(artistId string, discogFillLevel int) (*Artist, erro
 	artist.SpotifyId = artistId
 	sqlQueryBaseInfo := `
 		select name, spotifyuri, followers
-		from spotify_artist
+		from spotify.artist
 		where spotifyid=$1
 	`
 
@@ -280,8 +280,8 @@ func (db *db) GetArtistDiscography(artist *Artist, includeGroups []AlbumType) ([
 
 	sqlQueryDiscog := `
 		select spotifyidalbum
-		from spotify_album_artist
-			inner join spotify_album on (spotify_album_artist.spotifyidalbum=spotify_album.spotifyid)	
+		from spotify.album_artist
+			inner join spotify.album on (spotify.album_artist.spotifyidalbum=spotify.album.spotifyid)	
 		where spotifyidartist=$1 and ismain is true and type=any($2)
 	`
 
@@ -318,7 +318,7 @@ func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
 
 	sqlQueryTracks := `
 		select spotifyidtrack
-		from spotify_track_album
+		from spotify.track_album
 		where spotifyidalbum=$1
 		limit $2
 	`
@@ -358,7 +358,7 @@ func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
 func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
 	sqlQuerySearch := `
 		select spotifyid
-		from spotify_album
+		from spotify.album
 		order by levenshtein($1, title)
 		limit 1
 	`
@@ -382,7 +382,7 @@ func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
 func (db *db) GetArtistByMatch(iden string, discogFillLevel int) (*Artist, error) {
 	sqlQuerySearch := `
 		select spotifyid
-		from spotify_artist
+		from spotify.artist
 		order by levenshtein($1, name)
 		limit 1
 	`
@@ -406,7 +406,7 @@ func (db *db) GetArtistByMatch(iden string, discogFillLevel int) (*Artist, error
 func (db *db) GetTrackByMatch(iden string) (*Track, error) {
 	sqlQuerySearch := `
 		select spotifyid
-		from spotify_track
+		from spotify.track
 		order by levenshtein($1, title)
 		limit 1
 	`
