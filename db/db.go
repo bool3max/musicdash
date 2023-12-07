@@ -42,7 +42,7 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	row := db.pool.QueryRow(
 		context.TODO(),
 		`
-			select title, duration, tracklistnum, popularity, spotifyuri, explicit
+			select title, duration, tracklistnum, popularity, spotifyuri, explicit, isrc, ean, upc
 			from spotify_track		
 			where spotifyid=$1
 		`,
@@ -59,6 +59,9 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 		&track.SpotifyPopularity,
 		&track.SpotifyURI,
 		&track.IsExplicit,
+		&track.Isrc,
+		&track.Ean,
+		&track.Upc,
 	)
 
 	if err != nil {
