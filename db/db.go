@@ -180,7 +180,7 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 	}
 
 	switch albumType {
-	case "regular":
+	case "album":
 		album.Type = AlbumRegular
 	case "compilation":
 		album.Type = AlbumCompilation
