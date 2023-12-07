@@ -71,6 +71,30 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	// convert millisecond uint duration to time.Duration
 	track.Duration = time.Duration(trackDuration * 1e6)
 
+	var albumId string
+	row = db.pool.QueryRow(
+		context.TODO(),
+		`
+			select spotifyidalbum
+			from spotify_track_album
+			where spotifyidtrack=$1
+			limit 1
+		`,
+		trackId,
+	)
+
+	err = row.Scan(&albumId)
+	if err != nil {
+		return nil, err
+	}
+
+	belongingAlbum, err := db.GetAlbumById(albumId)
+	if err != nil {
+		return nil, err
+	}
+
+	track.Album = *belongingAlbum
+
 	// spotify ids of all artists on the track, main artist first
 	sqlQueryTrackArtists := `
 		select spotifyidartist
@@ -192,39 +216,6 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 		}
 
 		album.Artists = append(album.Artists, *artist)
-	}
-
-	// spotify ids of all tracks on the album
-	sqlQueryAlbumTracks := `
-		select spotifyidtrack
-		from spotify_track_album
-			inner join spotify_track on (spotify_track_album.spotifyidtrack=spotify_track.spotifyid)
-		where spotifyidalbum=$1
-		order by spotify_track.tracklistnum asc
-	`
-
-	rows, err = db.pool.Query(
-		context.TODO(),
-		sqlQueryAlbumTracks,
-		albumId,
-	)
-
-	if err != nil {
-		return nil, err
-	}
-
-	trackIds, err := pgx.CollectRows(rows, pgx.RowTo[string])
-	if err != nil {
-		return nil, err
-	}
-
-	for _, trackId := range trackIds {
-		track, err := db.GetTrackById(trackId)
-		if err != nil {
-			return nil, err
-		}
-
-		album.Tracks = append(album.Tracks, *track)
 	}
 
 	return album, nil
