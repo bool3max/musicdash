@@ -1,5 +1,5 @@
 // The spotify package defines the Spotify ResourceProvider which obtains
-// data from the Spotify Web API, as well as some constants.
+// data from the Spotify Web API using client-credentials authentication.
 package spotify
 
 import (
@@ -20,6 +20,8 @@ const (
 	endpointAlbum  = "https://api.spotify.com/v1/albums/"
 	endpointSearch = "https://api.spotify.com/v1/search/"
 )
+
+const maxIdsGetSeveralAlbums = 20
 
 type apiAccessToken struct {
 	Access_token string `json:"access_token"`
@@ -259,6 +261,30 @@ func (spot *spotify) GetAlbumById(id string) (*db.Album, error) {
 }
 
 func (spot *spotify) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
+	// if number of ids requested is more than allowed by api, split slice into
+	// chunks of max allowed size
+	if len(ids) > maxIdsGetSeveralAlbums {
+		all := make([]db.Album, 0, len(ids))
+		for startIdx := 0; startIdx < len(ids); startIdx += maxIdsGetSeveralAlbums {
+			var idsRange []string
+
+			if startIdx+maxIdsGetSeveralAlbums > len(ids) {
+				idsRange = ids[startIdx:]
+			} else {
+				idsRange = ids[startIdx : startIdx+maxIdsGetSeveralAlbums]
+			}
+
+			batch, err := spot.GetSeveralAlbumsById(idsRange)
+			if err != nil {
+				return nil, err
+			}
+
+			all = append(all, batch...)
+		}
+
+		return all, nil
+	}
+
 	requestUrl := endpointAlbum + "?" + url.Values{"ids": {strings.Join(ids, ",")}}.Encode()
 	var result struct {
 		Albums []album `json:"albums"`
