@@ -226,7 +226,7 @@ func (spot *spotify) GetArtistById(id string, discogFillLevel int, albumTypes []
 	dbArtist := artist.toDB()
 
 	if discogFillLevel > 0 {
-		if err := dbArtist.FillDiscography(spot, discogFillLevel > 1); err != nil {
+		if err := dbArtist.FillDiscography(spot, albumTypes, discogFillLevel > 1); err != nil {
 			return nil, err
 		}
 	}

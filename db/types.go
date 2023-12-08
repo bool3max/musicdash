@@ -271,8 +271,8 @@ type Artist struct {
 // Obtain an artist's complete discography using the specified provider
 // after which it will be available in artist.Discography.
 // If fillTracklists is true, each one of the album's tracklists is also provided.
-func (artist *Artist) FillDiscography(provider ResourceProvider, fillTracklists bool) error {
-	discog, err := provider.GetArtistDiscography(artist, nil)
+func (artist *Artist) FillDiscography(provider ResourceProvider, albumTypes []AlbumType, fillTracklists bool) error {
+	discog, err := provider.GetArtistDiscography(artist, albumTypes)
 	if err != nil {
 		return err
 	}

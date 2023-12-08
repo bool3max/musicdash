@@ -265,7 +265,7 @@ func (db *db) GetArtistById(artistId string, discogFillLevel int, albumTypes []A
 	}
 
 	if discogFillLevel > 0 {
-		artist.FillDiscography(db, discogFillLevel > 1)
+		artist.FillDiscography(db, albumTypes, discogFillLevel > 1)
 	}
 
 	return artist, nil
