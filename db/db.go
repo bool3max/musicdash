@@ -121,7 +121,7 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	}
 
 	for _, artistId := range artistIds {
-		artist, err := db.GetArtistById(artistId, 0)
+		artist, err := db.GetArtistById(artistId, 0, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -212,7 +212,7 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 	}
 
 	for _, artistId := range artistIds {
-		artist, err := db.GetArtistById(artistId, 0)
+		artist, err := db.GetArtistById(artistId, 0, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -236,7 +236,7 @@ func (db *db) GetSeveralAlbumsById(ids []string) ([]Album, error) {
 	return albums, nil
 }
 
-func (db *db) GetArtistById(artistId string, discogFillLevel int) (*Artist, error) {
+func (db *db) GetArtistById(artistId string, discogFillLevel int, albumTypes []AlbumType) (*Artist, error) {
 	artist := new(Artist)
 	artist.SpotifyId = artistId
 	sqlQueryBaseInfo := `
@@ -379,7 +379,7 @@ func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
 	return db.GetAlbumById(spotifyId)
 }
 
-func (db *db) GetArtistByMatch(iden string, discogFillLevel int) (*Artist, error) {
+func (db *db) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []AlbumType) (*Artist, error) {
 	sqlQuerySearch := `
 		select spotifyid
 		from spotify.artist
@@ -400,7 +400,7 @@ func (db *db) GetArtistByMatch(iden string, discogFillLevel int) (*Artist, error
 		return nil, err
 	}
 
-	return db.GetArtistById(spotifyId, discogFillLevel)
+	return db.GetArtistById(spotifyId, discogFillLevel, albumTypes)
 }
 
 func (db *db) GetTrackByMatch(iden string) (*Track, error) {

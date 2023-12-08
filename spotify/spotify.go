@@ -217,7 +217,7 @@ func (spot *spotify) GetTrackByMatch(iden string) (*db.Track, error) {
 	return spot.GetTrackById(firstResultId)
 }
 
-func (spot *spotify) GetArtistById(id string, discogFillLevel int) (*db.Artist, error) {
+func (spot *spotify) GetArtistById(id string, discogFillLevel int, albumTypes []db.AlbumType) (*db.Artist, error) {
 	var artist artist
 	if err := spot.jsonGetHelper(endpointArtist+id, &artist); err != nil {
 		return nil, err
@@ -234,14 +234,14 @@ func (spot *spotify) GetArtistById(id string, discogFillLevel int) (*db.Artist, 
 	return &dbArtist, nil
 }
 
-func (spot *spotify) GetArtistByMatch(iden string, discogFillLevel int) (*db.Artist, error) {
+func (spot *spotify) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []db.AlbumType) (*db.Artist, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
 	}
 
 	firstResultId := search.Artists[0].SpotifyId
-	artist, err := spot.GetArtistById(firstResultId, discogFillLevel)
+	artist, err := spot.GetArtistById(firstResultId, discogFillLevel, albumTypes)
 	if err != nil {
 		return nil, err
 	}

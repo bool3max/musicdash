@@ -520,8 +520,8 @@ type ResourceProvider interface {
 	// GetArtistByMatch(..., 0), or a discography with both albums
 	// and their respective filled out tracklists despite specifying
 	// GetArtistByMatch(..., 1)
-	GetArtistById(string, int) (*Artist, error)
-	GetArtistByMatch(string, int) (*Artist, error)
+	GetArtistById(string, int, []AlbumType) (*Artist, error)
+	GetArtistByMatch(string, int, []AlbumType) (*Artist, error)
 
 	GetArtistDiscography(*Artist, []AlbumType) ([]Album, error)
 	GetAlbumTracklist(*Album) ([]Track, error)
