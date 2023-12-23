@@ -1,7 +1,7 @@
 package spotify
 
 import (
-	"bool3max/musicdash/db"
+	music "bool3max/musicdash/music"
 	"time"
 )
 
@@ -24,13 +24,13 @@ type track struct {
 	ExternalIds external_ids `json:"external_ids"`
 }
 
-func (track track) toDB() db.Track {
-	dbArtists := make([]db.Artist, len(track.Artists))
+func (track track) toDB() music.Track {
+	dbArtists := make([]music.Artist, len(track.Artists))
 	for idx, spotifyArtist := range track.Artists {
 		dbArtists[idx] = spotifyArtist.toDB()
 	}
 
-	return db.Track{
+	return music.Track{
 		Title:             track.Name,
 		Duration:          time.Duration(track.DurationMS * 1e6),
 		TracklistNum:      track.TrackNum,
@@ -57,13 +57,13 @@ type artist struct {
 	SpotifyURI string `json:"uri"`
 }
 
-func (artist artist) toDB() db.Artist {
-	dbImages := make([]db.MusicImage, len(artist.Images))
+func (artist artist) toDB() music.Artist {
+	dbImages := make([]music.MusicImage, len(artist.Images))
 	for idx, img := range artist.Images {
 		dbImages[idx] = img.toDB(artist.Id)
 	}
 
-	return db.Artist{
+	return music.Artist{
 		Name:                 artist.Name,
 		Images:               dbImages,
 		SpotifyId:            artist.Id,
@@ -87,10 +87,10 @@ type album struct {
 	SpotifyURI  string `json:"uri"`
 }
 
-func (album album) toDB() db.Album {
-	dbArtists := make([]db.Artist, len(album.Artists))
-	dbTracks := make([]db.Track, len(album.Tracks.Items))
-	dbImages := make([]db.MusicImage, len(album.Images))
+func (album album) toDB() music.Album {
+	dbArtists := make([]music.Artist, len(album.Artists))
+	dbTracks := make([]music.Track, len(album.Tracks.Items))
+	dbImages := make([]music.MusicImage, len(album.Images))
 
 	for idx, spotifyArtist := range album.Artists {
 		dbArtists[idx] = spotifyArtist.toDB()
@@ -107,17 +107,17 @@ func (album album) toDB() db.Album {
 	releaseDate, _ := time.Parse(time.DateOnly, album.ReleaseDate)
 
 	// parse album type from string to db.AlbumType
-	var albumType db.AlbumType
+	var albumType music.AlbumType
 	switch album.Type {
 	case "album":
-		albumType = db.AlbumRegular
+		albumType = music.AlbumRegular
 	case "compilation":
-		albumType = db.AlbumCompilation
+		albumType = music.AlbumCompilation
 	case "single":
-		albumType = db.AlbumSingle
+		albumType = music.AlbumSingle
 	}
 
-	return db.Album{
+	return music.Album{
 		Title:       album.Name,
 		CountTracks: album.CountTracks,
 		Artists:     dbArtists,
@@ -138,8 +138,8 @@ type image struct {
 	Url           string
 }
 
-func (image image) toDB(spotifyId string) db.MusicImage {
-	return db.MusicImage{
+func (image image) toDB(spotifyId string) music.MusicImage {
+	return music.MusicImage{
 		Width:     image.Width,
 		Height:    image.Height,
 		Url:       image.Url,
@@ -154,9 +154,9 @@ func (image image) toDB(spotifyId string) db.MusicImage {
 // or when an ID of a specific resoure is required in order to obtain its
 // complete version
 type Search struct {
-	Albums  []db.Album
-	Tracks  []db.Track
-	Artists []db.Artist
+	Albums  []music.Album
+	Tracks  []music.Track
+	Artists []music.Artist
 }
 
 // API response struct for the Spotify /search endpoint

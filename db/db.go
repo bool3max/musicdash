@@ -1,6 +1,7 @@
 package db
 
 import (
+	music "bool3max/musicdash/music"
 	"context"
 	"errors"
 	"os"
@@ -25,7 +26,7 @@ type db struct {
 	pool *pgxpool.Pool
 }
 
-func IncludeGroupToString(group []AlbumType) string {
+func IncludeGroupToString(group []music.AlbumType) string {
 	as_strings := make([]string, 0, len(group))
 	for _, g := range group {
 		as_strings = append(as_strings, string(g))
@@ -34,8 +35,8 @@ func IncludeGroupToString(group []AlbumType) string {
 	return strings.Join(as_strings, ",")
 }
 
-func (db *db) GetTrackById(trackId string) (*Track, error) {
-	track := new(Track)
+func (db *db) GetTrackById(trackId string) (*music.Track, error) {
+	track := new(music.Track)
 	track.SpotifyId = trackId
 
 	// query the base info about the track from the database
@@ -132,12 +133,12 @@ func (db *db) GetTrackById(trackId string) (*Track, error) {
 	return track, nil
 }
 
-func (db *db) GetSeveralTracksById(ids []string) ([]Track, error) {
-	tracks := make([]Track, len(ids))
+func (db *db) GetSeveralTracksById(ids []string) ([]music.Track, error) {
+	tracks := make([]music.Track, len(ids))
 	for idx, trackId := range ids {
 		track, err := db.GetTrackById(trackId)
 		if err != nil {
-			return []Track{}, err
+			return []music.Track{}, err
 		}
 		tracks[idx] = *track
 	}
@@ -145,8 +146,8 @@ func (db *db) GetSeveralTracksById(ids []string) ([]Track, error) {
 	return tracks, nil
 }
 
-func (db *db) GetAlbumById(albumId string) (*Album, error) {
-	album := new(Album)
+func (db *db) GetAlbumById(albumId string) (*music.Album, error) {
+	album := new(music.Album)
 	album.SpotifyId = albumId
 
 	sqlQueryBaseInfo := `
@@ -181,11 +182,11 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 
 	switch albumType {
 	case "album":
-		album.Type = AlbumRegular
+		album.Type = music.AlbumRegular
 	case "compilation":
-		album.Type = AlbumCompilation
+		album.Type = music.AlbumCompilation
 	case "single":
-		album.Type = AlbumSingle
+		album.Type = music.AlbumSingle
 	}
 
 	// spotify ids of all album artists, main artist first
@@ -223,12 +224,12 @@ func (db *db) GetAlbumById(albumId string) (*Album, error) {
 	return album, nil
 }
 
-func (db *db) GetSeveralAlbumsById(ids []string) ([]Album, error) {
-	albums := make([]Album, len(ids))
+func (db *db) GetSeveralAlbumsById(ids []string) ([]music.Album, error) {
+	albums := make([]music.Album, len(ids))
 	for idx, albumId := range ids {
 		track, err := db.GetAlbumById(albumId)
 		if err != nil {
-			return []Album{}, err
+			return []music.Album{}, err
 		}
 		albums[idx] = *track
 	}
@@ -236,8 +237,8 @@ func (db *db) GetSeveralAlbumsById(ids []string) ([]Album, error) {
 	return albums, nil
 }
 
-func (db *db) GetArtistById(artistId string, discogFillLevel int, albumTypes []AlbumType) (*Artist, error) {
-	artist := new(Artist)
+func (db *db) GetArtistById(artistId string, discogFillLevel int, albumTypes []music.AlbumType) (*music.Artist, error) {
+	artist := new(music.Artist)
 	artist.SpotifyId = artistId
 	sqlQueryBaseInfo := `
 		select name, spotifyuri, followers
@@ -271,12 +272,12 @@ func (db *db) GetArtistById(artistId string, discogFillLevel int, albumTypes []A
 	return artist, nil
 }
 
-func (db *db) GetArtistDiscography(artist *Artist, includeGroups []AlbumType) ([]Album, error) {
+func (db *db) GetArtistDiscography(artist *music.Artist, includeGroups []music.AlbumType) ([]music.Album, error) {
 	if includeGroups == nil {
-		includeGroups = []AlbumType{AlbumRegular}
+		includeGroups = []music.AlbumType{music.AlbumRegular}
 	}
 
-	discog := make([]Album, 0)
+	discog := make([]music.Album, 0)
 
 	sqlQueryDiscog := `
 		select spotifyidalbum
@@ -313,8 +314,8 @@ func (db *db) GetArtistDiscography(artist *Artist, includeGroups []AlbumType) ([
 	return discog, nil
 }
 
-func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
-	tracklist := make([]Track, album.CountTracks)
+func (db *db) GetAlbumTracklist(album *music.Album) ([]music.Track, error) {
+	tracklist := make([]music.Track, album.CountTracks)
 
 	sqlQueryTracks := `
 		select spotifyidtrack
@@ -355,7 +356,7 @@ func (db *db) GetAlbumTracklist(album *Album) ([]Track, error) {
 // based on the name of the resource being searched for, whereas the same methods
 // of the Spotify provider search the entire spotify catalog (using its /search endpoint)
 // and return the first result of the requested type
-func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
+func (db *db) GetAlbumByMatch(iden string) (*music.Album, error) {
 	sqlQuerySearch := `
 		select spotifyid
 		from spotify.album
@@ -379,7 +380,7 @@ func (db *db) GetAlbumByMatch(iden string) (*Album, error) {
 	return db.GetAlbumById(spotifyId)
 }
 
-func (db *db) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []AlbumType) (*Artist, error) {
+func (db *db) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []music.AlbumType) (*music.Artist, error) {
 	sqlQuerySearch := `
 		select spotifyid
 		from spotify.artist
@@ -403,7 +404,7 @@ func (db *db) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []Al
 	return db.GetArtistById(spotifyId, discogFillLevel, albumTypes)
 }
 
-func (db *db) GetTrackByMatch(iden string) (*Track, error) {
+func (db *db) GetTrackByMatch(iden string) (*music.Track, error) {
 	sqlQuerySearch := `
 		select spotifyid
 		from spotify.track

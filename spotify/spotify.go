@@ -4,6 +4,7 @@ package spotify
 
 import (
 	"bool3max/musicdash/db"
+	music "bool3max/musicdash/music"
 	"encoding/json"
 	"errors"
 	"io"
@@ -176,7 +177,7 @@ func (spot *spotify) Search(query string, limit int) (Search, error) {
 	return search, nil
 }
 
-func (spot *spotify) GetTrackById(id string) (*db.Track, error) {
+func (spot *spotify) GetTrackById(id string) (*music.Track, error) {
 	var track track
 	if err := spot.jsonGetHelper(endpointTrack+id, &track); err != nil {
 		return nil, err
@@ -187,7 +188,7 @@ func (spot *spotify) GetTrackById(id string) (*db.Track, error) {
 	return &dbTrack, nil
 }
 
-func (spot *spotify) GetSeveralTracksById(ids []string) ([]db.Track, error) {
+func (spot *spotify) GetSeveralTracksById(ids []string) ([]music.Track, error) {
 	requestUrl := endpointTrack + "?" + url.Values{"ids": {strings.Join(ids, ",")}}.Encode()
 	var result struct {
 		Tracks []track `json:"tracks"`
@@ -197,7 +198,7 @@ func (spot *spotify) GetSeveralTracksById(ids []string) ([]db.Track, error) {
 		return nil, err
 	}
 
-	dbTracks := make([]db.Track, len(ids))
+	dbTracks := make([]music.Track, len(ids))
 	for trackIdx, track := range result.Tracks {
 		dbTracks[trackIdx] = track.toDB()
 	}
@@ -205,7 +206,7 @@ func (spot *spotify) GetSeveralTracksById(ids []string) ([]db.Track, error) {
 	return dbTracks, nil
 }
 
-func (spot *spotify) GetTrackByMatch(iden string) (*db.Track, error) {
+func (spot *spotify) GetTrackByMatch(iden string) (*music.Track, error) {
 	// perform a search to obtain id of the desired track
 	search, err := spot.Search(iden, 1)
 	if err != nil {
@@ -217,7 +218,7 @@ func (spot *spotify) GetTrackByMatch(iden string) (*db.Track, error) {
 	return spot.GetTrackById(firstResultId)
 }
 
-func (spot *spotify) GetArtistById(id string, discogFillLevel int, albumTypes []db.AlbumType) (*db.Artist, error) {
+func (spot *spotify) GetArtistById(id string, discogFillLevel int, albumTypes []music.AlbumType) (*music.Artist, error) {
 	var artist artist
 	if err := spot.jsonGetHelper(endpointArtist+id, &artist); err != nil {
 		return nil, err
@@ -234,7 +235,7 @@ func (spot *spotify) GetArtistById(id string, discogFillLevel int, albumTypes []
 	return &dbArtist, nil
 }
 
-func (spot *spotify) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []db.AlbumType) (*db.Artist, error) {
+func (spot *spotify) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []music.AlbumType) (*music.Artist, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
@@ -249,7 +250,7 @@ func (spot *spotify) GetArtistByMatch(iden string, discogFillLevel int, albumTyp
 	return artist, nil
 }
 
-func (spot *spotify) GetAlbumById(id string) (*db.Album, error) {
+func (spot *spotify) GetAlbumById(id string) (*music.Album, error) {
 	var album album
 	if err := spot.jsonGetHelper(endpointAlbum+id, &album); err != nil {
 		return nil, err
@@ -260,11 +261,11 @@ func (spot *spotify) GetAlbumById(id string) (*db.Album, error) {
 	return &dbAlbum, nil
 }
 
-func (spot *spotify) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
+func (spot *spotify) GetSeveralAlbumsById(ids []string) ([]music.Album, error) {
 	// if number of ids requested is more than allowed by api, split slice into
 	// chunks of max allowed size
 	if len(ids) > maxIdsGetSeveralAlbums {
-		all := make([]db.Album, 0, len(ids))
+		all := make([]music.Album, 0, len(ids))
 		for startIdx := 0; startIdx < len(ids); startIdx += maxIdsGetSeveralAlbums {
 			var idsRange []string
 
@@ -294,7 +295,7 @@ func (spot *spotify) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
 		return nil, err
 	}
 
-	dbAlbums := make([]db.Album, len(ids))
+	dbAlbums := make([]music.Album, len(ids))
 	for albumIdx, album := range result.Albums {
 		dbAlbums[albumIdx] = album.toDB()
 	}
@@ -302,7 +303,7 @@ func (spot *spotify) GetSeveralAlbumsById(ids []string) ([]db.Album, error) {
 	return dbAlbums, nil
 }
 
-func (spot *spotify) GetAlbumByMatch(iden string) (*db.Album, error) {
+func (spot *spotify) GetAlbumByMatch(iden string) (*music.Album, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
 		return nil, err
@@ -318,9 +319,9 @@ func (spot *spotify) GetAlbumByMatch(iden string) (*db.Album, error) {
 // includeGroups specifies types of albums to include in the response and can contain
 // any of the following, at most once: album, single, appears_on, compilation
 // If includeGroups is nil, {"album"} is assumed
-func (spot *spotify) GetArtistDiscography(artist *db.Artist, includeGroups []db.AlbumType) ([]db.Album, error) {
+func (spot *spotify) GetArtistDiscography(artist *music.Artist, includeGroups []music.AlbumType) ([]music.Album, error) {
 	if includeGroups == nil {
-		includeGroups = []db.AlbumType{db.AlbumRegular}
+		includeGroups = []music.AlbumType{music.AlbumRegular}
 	}
 
 	var response struct {
@@ -359,7 +360,7 @@ func (spot *spotify) GetArtistDiscography(artist *db.Artist, includeGroups []db.
 // here we perform two requests: one to collect Spotify IDs of all the tracks on the album
 // and another to collect detailed info about each of the tracks using the dedicated
 // /tracks endpoint and the spotify id(s) from the first request.
-func (spot *spotify) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
+func (spot *spotify) GetAlbumTracklist(album *music.Album) ([]music.Track, error) {
 	var response struct {
 		Items []track
 
@@ -385,7 +386,7 @@ func (spot *spotify) GetAlbumTracklist(album *db.Album) ([]db.Track, error) {
 
 	albumTracks, err := spot.GetSeveralTracksById(tracklistIds)
 	if err != nil {
-		return []db.Track{}, err
+		return []music.Track{}, err
 	}
 
 	return albumTracks, nil
