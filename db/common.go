@@ -18,6 +18,10 @@ type db struct {
 	pool *pgxpool.Pool
 }
 
+func (db *db) Close() {
+	db.pool.Close()
+}
+
 func IncludeGroupToString(group []music.AlbumType) string {
 	as_strings := make([]string, 0, len(group))
 	for _, g := range group {
