@@ -23,7 +23,7 @@ func (db *db) GetTrackById(trackId string) (*music.Track, error) {
 	row := db.pool.QueryRow(
 		context.TODO(),
 		`
-			select title, duration, tracklistnum, popularity, spotifyuri, explicit, isrc
+			select title, duration, tracklistnum, discnum, popularity, spotifyuri, explicit, isrc
 			from spotify.track		
 			where spotifyid=$1
 		`,
@@ -37,6 +37,7 @@ func (db *db) GetTrackById(trackId string) (*music.Track, error) {
 		&track.Title,
 		&trackDuration,
 		&track.TracklistNum,
+		&track.DiscNum,
 		&track.SpotifyPopularity,
 		&track.SpotifyURI,
 		&track.IsExplicit,
@@ -297,6 +298,7 @@ func (db *db) GetArtistDiscography(artist *music.Artist, includeGroups []music.A
 func (db *db) GetAlbumTracklist(album *music.Album) ([]music.Track, error) {
 	tracklist := make([]music.Track, album.CountTracks)
 
+	// IDs of all tracks on the album
 	sqlQueryTracks := `
 		select spotifyidtrack
 		from spotify.track_album

@@ -19,6 +19,7 @@ type track struct {
 	SpotifyURI  string `json:"uri"`
 	DurationMS  int    `json:"duration_ms"`
 	TrackNum    int    `json:"track_number"`
+	DiscNum     int    `json:"disc_number"`
 	Explicit    bool   `json:"explicit"`
 	Popularity  int
 	ExternalIds external_ids `json:"external_ids"`
@@ -34,6 +35,7 @@ func (track track) toDB() music.Track {
 		Title:             track.Name,
 		Duration:          time.Duration(track.DurationMS * 1e6),
 		TracklistNum:      track.TrackNum,
+		DiscNum:           track.DiscNum,
 		IsExplicit:        track.Explicit,
 		Album:             track.Album.toDB(),
 		Artists:           dbArtists,
