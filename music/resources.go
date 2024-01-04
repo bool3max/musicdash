@@ -20,17 +20,6 @@ const (
 	AlbumSingle      AlbumType = "single"
 )
 
-type Resource interface {
-	// Check if the corresponding resource is preserved in the local database
-	IsPreserved(context.Context, *pgxpool.Pool) (bool, error)
-
-	// Preserve the corresponding resource to the local database
-	// The third argument denotes whether to recurse and also preserve
-	// children of the resource. Argument may be ignored if the resource
-	// has no children.
-	Preserve(context.Context, *pgxpool.Pool, bool) error
-}
-
 // A visual representation of a Spotify resource identified by a Spotify ID.
 // MusicImage.Data[] stores binary data of the image and may be empty (nil) if the
 // image hasn't yet been downloaded. MusicImage.Download() downloads the image
@@ -509,6 +498,7 @@ type ResourceProvider interface {
 	// Getting an album by whatever method never fills in its tracklist.
 	// In order to obtain a tracklist, use either ResourceProvider.GetAlbumTracklist()
 	// or db.Album.FillTracklist().
+
 	GetAlbumById(string) (*Album, error)
 	GetSeveralAlbumsById([]string) ([]Album, error)
 	GetAlbumByMatch(string) (*Album, error)
@@ -524,6 +514,7 @@ type ResourceProvider interface {
 	// GetArtistByMatch(..., 0), or a discography with both albums
 	// and their respective filled out tracklists despite specifying
 	// GetArtistByMatch(..., 1)
+
 	GetArtistById(string, int, []AlbumType) (*Artist, error)
 	GetArtistByMatch(string, int, []AlbumType) (*Artist, error)
 
