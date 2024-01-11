@@ -14,15 +14,15 @@ func NewPool() (*pgxpool.Pool, error) {
 }
 
 // A ResourceProvider that pulls data in from the local database
-type db struct {
+type Db struct {
 	pool *pgxpool.Pool
 }
 
-func (db *db) Close() {
+func (db *Db) Close() {
 	db.pool.Close()
 }
 
-func (db *db) Pool() *pgxpool.Pool {
+func (db *Db) Pool() *pgxpool.Pool {
 	return db.pool
 }
 
@@ -35,11 +35,11 @@ func IncludeGroupToString(group []music.AlbumType) string {
 	return strings.Join(as_strings, ",")
 }
 
-func New() (*db, error) {
+func New() (*Db, error) {
 	pool, err := NewPool()
 	if err != nil {
 		return nil, err
 	}
 
-	return &db{pool: pool}, nil
+	return &Db{pool: pool}, nil
 }
