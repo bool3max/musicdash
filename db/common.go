@@ -13,13 +13,17 @@ func NewPool() (*pgxpool.Pool, error) {
 	return pgxpool.New(context.TODO(), os.Getenv("MUSICDASH_DATABASE_URL"))
 }
 
-// a ResourceProvider that pulls data in from the local database
+// A ResourceProvider that pulls data in from the local database
 type db struct {
 	pool *pgxpool.Pool
 }
 
 func (db *db) Close() {
 	db.pool.Close()
+}
+
+func (db *db) Pool() *pgxpool.Pool {
+	return db.pool
 }
 
 func IncludeGroupToString(group []music.AlbumType) string {
