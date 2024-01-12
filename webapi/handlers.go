@@ -16,6 +16,7 @@ type SignupClassicRequestData struct {
 
 var responseServerError = gin.H{"message": "Server error."}
 
+// Gin handler for signing up using an email and password.
 func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var data SignupClassicRequestData
@@ -29,7 +30,7 @@ func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		exists, err := db.UsernameIsRegistered(data.Username)
+		exists, err := db.UsernameIsRegistered(c, data.Username)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responseServerError)
 			return
@@ -58,5 +59,11 @@ func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusCreated, gin.H{"message": "Account created successfully."})
+	}
+}
+
+func HandlerLoginCred(db *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+
 	}
 }

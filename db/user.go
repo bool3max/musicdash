@@ -10,8 +10,8 @@ import (
 )
 
 // Check if the specified username already exists in the database.
-func (db *Db) UsernameIsRegistered(username string) (bool, error) {
-	row := db.pool.QueryRow(context.TODO(), "select username from auth.user where username=$1 limit 1", username)
+func (db *Db) UsernameIsRegistered(ctx context.Context, username string) (bool, error) {
+	row := db.pool.QueryRow(ctx, "select username from auth.user where username=$1 limit 1", username)
 
 	err := row.Scan(nil)
 
