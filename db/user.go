@@ -164,3 +164,16 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 
 	return UserAuthToken(authTokenB64), nil
 }
+
+func (db *Db) UserRevokeToken(ctx context.Context, token UserAuthToken) error {
+	_, err := db.pool.Exec(
+		ctx,
+		`
+			delete from auth.auth_token
+			where auth_token = $1	
+		`,
+		token,
+	)
+
+	return err
+}
