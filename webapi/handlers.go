@@ -2,10 +2,14 @@ package webapi
 
 import (
 	"bool3max/musicdash/db"
+	"log"
 	"net/http"
 	"net/mail"
+	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
+	"github.com/jackc/pgx/v5"
 )
 
 type SignupCredRequestData struct {
@@ -20,7 +24,48 @@ type LoginCredRequestData struct {
 }
 
 var responseServerError = gin.H{"message": "Server error."}
-var responseBadRequest = gin.H{"message": "Bad request"}
+var responseBadRequest = gin.H{"message": "Bad request."}
+var responseNotLoggedIn = gin.H{"message": "Not logged in."}
+var responseInvalidLogin = gin.H{"message": "Invalid login."}
+
+// Returns a Gin handler middleware that ensures that the user is logged-in into a valid
+// session. If the user isn't logged in or the token is invalid, this middleware aborts the
+// handler chain (if that's the right term for it?)
+func AuthNeeded(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		log.Println("AUTHENTICATION CHECK...")
+		authToken, err := c.Cookie("auth_token")
+		// no auth session cookie
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseNotLoggedIn)
+			return
+		}
+
+		var userId uuid.UUID
+
+		err = database.Pool().QueryRow(
+			c,
+			`
+				select userid
+				from auth.auth_token	
+				where auth.auth_token.token=$1
+			`,
+			authToken,
+		).Scan(&userId)
+
+		if err != nil {
+			log.Println(err)
+			// auth token not in database
+			if err == pgx.ErrNoRows {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, responseInvalidLogin)
+				return
+			}
+
+			// other db error
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+		}
+	}
+}
 
 // Gin handler for signing up using an email and password.
 func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
@@ -94,6 +139,38 @@ func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
+		c.SetCookie("auth_token", string(authToken), int((time.Hour * 24 * 30).Seconds()), "/", "", true, true)
 		c.JSON(http.StatusOK, gin.H{"token": authToken})
+	}
+}
+
+func HandlerLogout(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		// at point of this handler being called we know the user is logged into a valid sessin
+		// because of the preceding auth middleware
+
+		authToken, err := c.Cookie("auth_token")
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responseServerError)
+			return
+		}
+
+		_, err = database.Pool().Exec(
+			c,
+			`
+				delete from auth.auth_token
+				where auth.auth_token.token=$1
+			`,
+			authToken,
+		)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, responseServerError)
+			return
+		}
+
+		// instruct client to clear cookie
+		c.SetCookie("auth_token", "", -1, "/", "", true, true)
+		c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully."})
 	}
 }
