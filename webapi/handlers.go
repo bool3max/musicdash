@@ -8,20 +8,26 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-type SignupClassicRequestData struct {
+type SignupCredRequestData struct {
 	Username string `binding:"required"`
 	Email    string `binding:"required"`
 	Password string `binding:"required"`
 }
 
+type LoginCredRequestData struct {
+	Email    string `binding:"required"`
+	Password string `binding:"required"`
+}
+
 var responseServerError = gin.H{"message": "Server error."}
+var responseBadRequest = gin.H{"message": "Bad request"}
 
 // Gin handler for signing up using an email and password.
-func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
+func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		var data SignupClassicRequestData
+		var data SignupCredRequestData
 		if err := c.ShouldBindJSON(&data); err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Bad request"})
+			c.JSON(http.StatusBadRequest, responseBadRequest)
 			return
 		}
 
@@ -30,7 +36,7 @@ func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		exists, err := db.UsernameIsRegistered(c, data.Username)
+		exists, err := database.UsernameIsRegistered(c, data.Username)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, responseServerError)
 			return
@@ -53,7 +59,7 @@ func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		if err = db.UserInsert(data.Username, data.Password, data.Email); err != nil {
+		if err = database.UserInsert(data.Username, data.Password, data.Email); err != nil {
 			c.JSON(http.StatusInternalServerError, responseServerError)
 			return
 		}
@@ -62,8 +68,32 @@ func HandlerSignupClassic(db *db.Db) gin.HandlerFunc {
 	}
 }
 
-func HandlerLoginCred(db *db.Db) gin.HandlerFunc {
+func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		var data LoginCredRequestData
+		if err := c.ShouldBindJSON(&data); err != nil {
+			c.JSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
 
+		// validate e-mail address
+		_, err := mail.ParseAddress(data.Email)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid e-mail address."})
+			return
+		}
+
+		authToken, err := database.UserLogin(c, data.Password, data.Email)
+		if err != nil {
+			if err == db.ErrorEmailNotRegistered || err == db.ErrorPasswordIncorrect {
+				c.JSON(http.StatusUnauthorized, gin.H{"message": "Incorrect login credentials."})
+				return
+			}
+
+			c.JSON(http.StatusInternalServerError, responseServerError)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"token": authToken})
 	}
 }
