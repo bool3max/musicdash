@@ -155,13 +155,9 @@ func HandlerLogout(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		_, err = database.Pool().Exec(
+		err = database.UserRevokeToken(
 			c,
-			`
-				delete from auth.auth_token
-				where auth.auth_token.token=$1
-			`,
-			authToken,
+			db.UserAuthToken(authToken),
 		)
 
 		if err != nil {

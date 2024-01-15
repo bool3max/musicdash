@@ -170,7 +170,7 @@ func (db *Db) UserRevokeToken(ctx context.Context, token UserAuthToken) error {
 		ctx,
 		`
 			delete from auth.auth_token
-			where auth_token = $1	
+			where auth.auth_token.token = $1	
 		`,
 		token,
 	)
