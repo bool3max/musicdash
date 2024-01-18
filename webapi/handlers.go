@@ -3,6 +3,7 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/mail"
 	"net/url"
@@ -153,6 +154,7 @@ func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
+		c.SetSameSite(http.SameSiteStrictMode)
 		c.SetCookie("auth_token", string(authToken), int((time.Hour * 24 * 30).Seconds()), "/", "", true, true)
 		c.JSON(http.StatusOK, gin.H{"token": authToken})
 	}
@@ -185,17 +187,30 @@ func HandlerLogout(database *db.Db) gin.HandlerFunc {
 	}
 }
 
-func HandlerConnectSpotify(database *db.Db, spotify_client_id string) gin.HandlerFunc {
+func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// generate random string for state parameter
+		var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
+
+		state := make([]rune, 32)
+		for i := range state {
+			state[i] = letters[rand.Intn(len(letters))]
+		}
+
 		endpoint := "https://api.spotify.com/v1/authorize"
 		params := url.Values{
 			"client_id":     {spotify_client_id},
 			"response_type": {"code"},
 			"redirect_uri":  {"http://localhost:7070/api/spotify_connect_callback"},
 			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing"},
+			"state":         {string(state)},
 		}
 
 		final := endpoint + "?" + params.Encode()
+
+		// save the generated random state on the client
+		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetCookie("spotify_connect_state", string(state), 300, "/", "", true, true)
 
 		c.JSON(http.StatusOK, gin.H{"redirect_url": final})
 	}
