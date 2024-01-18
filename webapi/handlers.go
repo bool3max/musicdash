@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/mail"
+	"net/url"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -23,17 +24,18 @@ type LoginCredRequestData struct {
 	Password string `binding:"required"`
 }
 
-var responseServerError = gin.H{"message": "Server error."}
-var responseBadRequest = gin.H{"message": "Bad request."}
-var responseNotLoggedIn = gin.H{"message": "Not logged in."}
-var responseInvalidLogin = gin.H{"message": "Invalid login."}
+var (
+	responseServerError  = gin.H{"message": "Server error."}
+	responseBadRequest   = gin.H{"message": "Bad request."}
+	responseNotLoggedIn  = gin.H{"message": "Not logged in."}
+	responseInvalidLogin = gin.H{"message": "Invalid login."}
+)
 
 // Returns a Gin handler middleware that ensures that the user is logged-in into a valid
 // session. If the user isn't logged in or the token is invalid, this middleware aborts the
 // handler chain (if that's the right term for it?)
 func AuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		log.Println("AUTHENTICATION CHECK...")
 		authToken, err := c.Cookie("auth_token")
 		// no auth session cookie
 		if err != nil {
@@ -77,35 +79,47 @@ func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 		}
 
 		if len(data.Username) < 3 || len(data.Username) > 30 {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Username length must be between 3 and 30 characters."})
+			c.JSON(
+				http.StatusBadRequest,
+				gin.H{"message": "Username length must be between 3 and 30 characters."},
+			)
 			return
 		}
 
 		exists, err := database.UsernameIsRegistered(c, data.Username)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, responseServerError)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
 			return
 		}
 
 		if exists {
-			c.JSON(http.StatusForbidden, gin.H{"message": "An account with that username already exists."})
+			c.AbortWithStatusJSON(
+				http.StatusForbidden,
+				gin.H{"message": "An account with that username already exists."},
+			)
 			return
 		}
 
 		// bcrypt max password byte length is 72 bytes and we salt it with a uuidv4 which is 16 bytes
 		if len(data.Password) < 8 || len(data.Password) > (72-16) {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Password length must be at least 8 characters and no more than 56 characters."})
+			c.AbortWithStatusJSON(
+				http.StatusBadRequest,
+				gin.H{"message": "Password length must be at least 8 characters and no more than 56 characters."},
+			)
 			return
 		}
 
 		_, err = mail.ParseAddress(data.Email)
 		if err != nil {
-			c.JSON(http.StatusBadRequest, gin.H{"message": "Invalid e-mail address."})
+			c.JSON(
+				http.StatusBadRequest,
+				gin.H{"message": "Invalid e-mail address."},
+			)
 			return
 		}
 
 		if err = database.UserInsert(data.Username, data.Password, data.Email); err != nil {
-			c.JSON(http.StatusInternalServerError, responseServerError)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
 			return
 		}
 
@@ -168,5 +182,21 @@ func HandlerLogout(database *db.Db) gin.HandlerFunc {
 		// instruct client to clear cookie
 		c.SetCookie("auth_token", "", -1, "/", "", true, true)
 		c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully."})
+	}
+}
+
+func HandlerConnectSpotify(database *db.Db, spotify_client_id string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		endpoint := "https://api.spotify.com/v1/authorize"
+		params := url.Values{
+			"client_id":     {spotify_client_id},
+			"response_type": {"code"},
+			"redirect_uri":  {"http://localhost:7070/api/spotify_connect_callback"},
+			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing"},
+		}
+
+		final := endpoint + "?" + params.Encode()
+
+		c.JSON(http.StatusOK, gin.H{"redirect_url": final})
 	}
 }
