@@ -18,6 +18,58 @@ type UserAuthToken string
 
 var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrorPasswordIncorrect = errors.New("password incorrect")
+var ErrorInvalidAuthToken = errors.New("invalid auth token")
+
+type User struct {
+	Id       uuid.UUID
+	Username string
+	Email    string
+}
+
+// Validate the passed UserAuthToken and return an instance of the User that it belongs to.
+// If the passed auth. token is invalid (i.e. does not exist in the database), return an
+// ErrorInvalidAuthToken error and an empty User{} instance.
+func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (User, error) {
+	// TODO: fetching the user id and usre data could ofc be done from one db query,
+	// but as the user will in the future have much more data
+	newUser := User{}
+	err := db.pool.QueryRow(
+		ctx,
+		`
+			select userid
+			from auth.auth_token
+			where token=$1
+			limit 1
+		`,
+		string(token),
+	).Scan(&newUser.Id)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			// auth token not in database
+			return newUser, ErrorInvalidAuthToken
+		} else {
+			// other db error
+			return newUser, err
+		}
+	}
+
+	err = db.pool.QueryRow(
+		ctx,
+		`
+			select username, email
+			from auth.user
+			where id=$1
+		`,
+		newUser.Id,
+	).Scan(&newUser.Username, &newUser.Email)
+
+	if err != nil {
+		return User{}, err
+	}
+
+	return newUser, nil
+}
 
 // Check if the specified username already exists in the database.
 func (db *Db) UsernameIsRegistered(ctx context.Context, username string) (bool, error) {
@@ -165,6 +217,7 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 	return UserAuthToken(authTokenB64), nil
 }
 
+// Revoke a specific auth. token
 func (db *Db) UserRevokeToken(ctx context.Context, token UserAuthToken) error {
 	_, err := db.pool.Exec(
 		ctx,
@@ -173,6 +226,20 @@ func (db *Db) UserRevokeToken(ctx context.Context, token UserAuthToken) error {
 			where auth.auth_token.token = $1	
 		`,
 		token,
+	)
+
+	return err
+}
+
+// Revoke all active auth. tokens for the associated user
+func (db *Db) UserRevokeAllTokens(ctx context.Context, userId uuid.UUID) error {
+	_, err := db.pool.Exec(
+		ctx,
+		`
+			delete from auth.auth_token
+			where auth.auth_token.userid=$1
+		`,
+		userId,
 	)
 
 	return err
