@@ -3,6 +3,7 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -33,17 +34,28 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 			groupAccount.Use(AuthNeeded(database))
 
 			// Log out
-			groupAccount.DELETE("/logout", HandlerLogout(database))
+			groupAccount.DELETE("/logout", HandlerLogout(database, false))
 
-			// Initial endpoint in connecting spotify account, which returns a redirect URI
+			// log out everywhere (i.e. revoke all active auth tokens for account)
+			groupAccount.DELETE("/logout_everywhere", HandlerLogout(database, true))
+
+			// Initial endpoint in the process of connecting a Spotify account
+			// that returns a URI to Spotify's account auth. API
 			groupAccount.GET(
 				"/spotify_connect",
 				HandlerSpotifyConnectRedirect(database, os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID")),
 			)
+
+			// Spotify's auth. api then redirects the user back to this endpoint
+			groupAccount.GET(
+				"/spotify_connect_callback",
+				HandlerSpotifyConnectCallback(database, os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID"), os.Getenv("MUSICDASH_SPOTIFY_SECRET")),
+			)
 		}
 
-		api.GET("/res", func(ctx *gin.Context) {
-			ctx.String(200, "<h1>resource data</h1>")
+		api.GET("/res", AuthNeeded(database), func(ctx *gin.Context) {
+			loggedInUser, _ := ctx.Get("current_user")
+			ctx.String(200, "you are logged in as: "+fmt.Sprintf("%+v", loggedInUser))
 		})
 	}
 

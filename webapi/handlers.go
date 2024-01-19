@@ -2,7 +2,6 @@ package webapi
 
 import (
 	"bool3max/musicdash/db"
-	"log"
 	"math/rand"
 	"net/http"
 	"net/mail"
@@ -10,8 +9,6 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 )
 
 type SignupCredRequestData struct {
@@ -34,7 +31,8 @@ var (
 
 // Returns a Gin handler middleware that ensures that the user is logged-in into a valid
 // session. If the user isn't logged in or the token is invalid, this middleware aborts the
-// handler chain (if that's the right term for it?)
+// handler chain (if that's the right term for it?). Otherwise it saves the current logged in user
+// as into the gin context.
 func AuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authToken, err := c.Cookie("auth_token")
@@ -44,29 +42,19 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		var userId uuid.UUID
-
-		err = database.Pool().QueryRow(
-			c,
-			`
-				select userid
-				from auth.auth_token	
-				where auth.auth_token.token=$1
-			`,
-			authToken,
-		).Scan(&userId)
-
+		user, err := database.GetUserFromAuthToken(c, db.UserAuthToken(authToken))
 		if err != nil {
-			log.Println(err)
-			// auth token not in database
-			if err == pgx.ErrNoRows {
+			if err == db.ErrorInvalidAuthToken {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, responseInvalidLogin)
 				return
 			}
 
-			// other db error
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+			return
 		}
+
+		c.Set("current_auth_token", authToken)
+		c.Set("current_user", user)
 	}
 }
 
@@ -160,29 +148,43 @@ func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 	}
 }
 
-func HandlerLogout(database *db.Db) gin.HandlerFunc {
+func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// at point of this handler being called we know the user is logged into a valid sessin
-		// because of the preceding auth middleware
+		authToken := c.GetString("current_auth_token")
 
-		authToken, err := c.Cookie("auth_token")
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, responseServerError)
-			return
-		}
+		if everywhere {
+			// log out everywhere
+			current_user, _ := c.Get("current_user")
 
-		err = database.UserRevokeToken(
-			c,
-			db.UserAuthToken(authToken),
-		)
+			err := database.UserRevokeAllTokens(
+				c,
+				current_user.(db.User).Id,
+			)
 
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, responseServerError)
-			return
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+				return
+			}
+		} else {
+			// log out just this auth token
+			err := database.UserRevokeToken(
+				c,
+				db.UserAuthToken(authToken),
+			)
+
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, responseServerError)
+				return
+			}
 		}
 
 		// instruct client to clear cookie
 		c.SetCookie("auth_token", "", -1, "/", "", true, true)
+
+		// clear login auth info from context
+		c.Set("current_user", nil)
+		c.Set("current_auth_token", nil)
+
 		c.JSON(http.StatusOK, gin.H{"message": "Logged out successfully."})
 	}
 }
@@ -197,7 +199,7 @@ func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gi
 			state[i] = letters[rand.Intn(len(letters))]
 		}
 
-		endpoint := "https://api.spotify.com/v1/authorize"
+		endpoint := "https://accounts.spotify.com/authorize"
 		params := url.Values{
 			"client_id":     {spotify_client_id},
 			"response_type": {"code"},
@@ -213,5 +215,31 @@ func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gi
 		c.SetCookie("spotify_connect_state", string(state), 300, "/", "", true, true)
 
 		c.JSON(http.StatusOK, gin.H{"redirect_url": final})
+	}
+}
+
+func HandlerSpotifyConnectCallback(database *db.Db, spotify_client_id, spotify_secret string) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		queryState := c.Query("state")
+		queryCode := c.Query("code")
+		queryErr := c.Query("error")
+
+		clientState, err := c.Cookie("spotify_connect_state")
+
+		if queryState == "" || queryCode == "" || err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		if queryErr != "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Spotify response: " + queryErr})
+			return
+		}
+
+		if queryState != clientState {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "States don't match."})
+			return
+		}
+
 	}
 }
