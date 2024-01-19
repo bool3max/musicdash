@@ -9,19 +9,41 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-func NewPool() (*pgxpool.Pool, error) {
+// One instance of a Db{} database object is present per running program.
+// The pointer to that main one is declared here in the "db" package. It is unexported, and is
+// initially nil.
+var dbInstance *Db
+
+// helper function to create a new pgxpool.Pool connected to the local database
+func newPool() (*pgxpool.Pool, error) {
 	return pgxpool.New(context.TODO(), os.Getenv("MUSICDASH_DATABASE_URL"))
 }
 
-// A ResourceProvider that pulls data in from the local database
+// An object representing a database connection.
 type Db struct {
 	pool *pgxpool.Pool
+}
+
+// Return a valid connected instance of the Db databsae object. This simply returns the global
+// ptr to an existing instance, and instantiates it if already isn't.
+func Acquire() (*Db, error) {
+	if dbInstance == nil {
+		pool, err := newPool()
+		if err != nil {
+			return nil, err
+		}
+
+		dbInstance = &Db{pool}
+	}
+
+	return dbInstance, nil
 }
 
 func (db *Db) Close() {
 	db.pool.Close()
 }
 
+// return the underlying pool
 func (db *Db) Pool() *pgxpool.Pool {
 	return db.pool
 }
@@ -33,13 +55,4 @@ func IncludeGroupToString(group []music.AlbumType) string {
 	}
 
 	return strings.Join(as_strings, ",")
-}
-
-func New() (*Db, error) {
-	pool, err := NewPool()
-	if err != nil {
-		return nil, err
-	}
-
-	return &Db{pool: pool}, nil
 }
