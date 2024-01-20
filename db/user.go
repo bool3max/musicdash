@@ -171,14 +171,10 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 		}
 	}
 
-	log.Printf("user id from database: {%v}, len: {%v}\n", userId.String(), len(userId))
-
 	// A properly salted byte slice of the password the user guessed, as a []byte
 	passwordGuessSaltedBytes := make([]byte, 0, len(userId)+len(passwordGuessBytes))
 	passwordGuessSaltedBytes = append(passwordGuessSaltedBytes, userId[:]...)
 	passwordGuessSaltedBytes = append(passwordGuessSaltedBytes, passwordGuessBytes...)
-
-	log.Printf("login: passwordGuessSaltedBytes len: %v\n", len(passwordGuessSaltedBytes))
 
 	// compare correct password in db and guess
 	err = bcrypt.CompareHashAndPassword(pwdHashDb, passwordGuessSaltedBytes)
