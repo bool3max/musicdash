@@ -3,6 +3,7 @@ package db
 import (
 	music "bool3max/musicdash/music"
 	"context"
+	"log"
 	"os"
 	"strings"
 
@@ -21,17 +22,18 @@ type Db struct {
 
 // Return a valid connected instance of the Db database object. This simply returns the global
 // ptr to an existing instance, and instantiates it if already isn't.
-func Acquire() (*Db, error) {
+func Acquire() *Db {
 	if dbInstance == nil {
 		pool, err := pgxpool.New(context.TODO(), os.Getenv("MUSICDASH_DATABASE_URL"))
 		if err != nil {
-			return nil, err
+			log.Println("error acquiring database pgxpool connection: ", err)
+			os.Exit(1)
 		}
 
 		dbInstance = &Db{pool}
 	}
 
-	return dbInstance, nil
+	return dbInstance
 }
 
 func (db *Db) Close() {
