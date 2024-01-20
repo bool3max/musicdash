@@ -14,21 +14,16 @@ import (
 // initially nil.
 var dbInstance *Db
 
-// helper function to create a new pgxpool.Pool connected to the local database
-func newPool() (*pgxpool.Pool, error) {
-	return pgxpool.New(context.TODO(), os.Getenv("MUSICDASH_DATABASE_URL"))
-}
-
 // An object representing a database connection.
 type Db struct {
 	pool *pgxpool.Pool
 }
 
-// Return a valid connected instance of the Db databsae object. This simply returns the global
+// Return a valid connected instance of the Db database object. This simply returns the global
 // ptr to an existing instance, and instantiates it if already isn't.
 func Acquire() (*Db, error) {
 	if dbInstance == nil {
-		pool, err := newPool()
+		pool, err := pgxpool.New(context.TODO(), os.Getenv("MUSICDASH_DATABASE_URL"))
 		if err != nil {
 			return nil, err
 		}
