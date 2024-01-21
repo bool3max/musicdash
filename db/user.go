@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"errors"
+	"fmt"
 	"log"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -20,10 +22,20 @@ var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrorPasswordIncorrect = errors.New("password incorrect")
 var ErrorInvalidAuthToken = errors.New("invalid auth token")
 
+type SpotifyAuthDetails struct {
+	AccessToken, RefreshToken string
+	ExpiresAt                 time.Time
+}
+
 type User struct {
 	Id       uuid.UUID
 	Username string
 	Email    string
+	Spotify  SpotifyAuthDetails
+}
+
+func (user *User) String() string {
+	return fmt.Sprintf("[id:{%s}, username:{%s}, email:{%s}]", user.Id.String(), user.Username, user.Email)
 }
 
 // Validate the passed UserAuthToken and return an instance of the User that it belongs to.
