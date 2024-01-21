@@ -2,14 +2,25 @@ package webapi
 
 import (
 	"bool3max/musicdash/db"
+	"encoding/json"
+	"log"
 	"math/rand"
 	"net/http"
 	"net/mail"
 	"net/url"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
+
+type spotifyTokenResponse struct {
+	Access_token  string `json:"access_token"`
+	Token_type    string `json:"token_type"`
+	Scope         string `json:"scope"`
+	Expires_in    int    `json:"expires_in"`
+	Refresh_token string `json:"refresh_token"`
+}
 
 type SignupCredRequestData struct {
 	Username string `binding:"required"`
@@ -23,10 +34,10 @@ type LoginCredRequestData struct {
 }
 
 var (
-	responseServerError  = gin.H{"message": "Server error."}
-	responseBadRequest   = gin.H{"message": "Bad request."}
-	responseNotLoggedIn  = gin.H{"message": "Not logged in."}
-	responseInvalidLogin = gin.H{"message": "Invalid login."}
+	responseInternalServerError = gin.H{"message": "Server error."}
+	responseBadRequest          = gin.H{"message": "Bad request."}
+	responseNotLoggedIn         = gin.H{"message": "Not logged in."}
+	responseInvalidLogin        = gin.H{"message": "Invalid login."}
 )
 
 // Returns a Gin handler middleware that ensures that the user is logged-in into a valid
@@ -36,8 +47,9 @@ var (
 func AuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authToken, err := c.Cookie("auth_token")
-		// no auth session cookie
+		// no auth session cookie present
 		if err != nil {
+			log.Println("no auth cookie present: ", err)
 			c.AbortWithStatusJSON(http.StatusBadRequest, responseNotLoggedIn)
 			return
 		}
@@ -49,12 +61,13 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 				return
 			}
 
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 
+		// save the auth token used and the User into the gin context for future handlers to make use of
 		c.Set("current_auth_token", authToken)
-		c.Set("current_user", user)
+		c.Set("current_user", &user) // the user instance is saved as a pointer
 	}
 }
 
@@ -77,7 +90,7 @@ func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 
 		exists, err := database.UsernameIsRegistered(c, data.Username)
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 
@@ -108,7 +121,7 @@ func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 		}
 
 		if err = database.UserInsert(data.Username, data.Password, data.Email); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 
@@ -138,11 +151,11 @@ func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 				return
 			}
 
-			c.JSON(http.StatusInternalServerError, responseServerError)
+			c.JSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 
-		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("auth_token", string(authToken), int((time.Hour * 24 * 30).Seconds()), "/", "", true, true)
 		c.JSON(http.StatusOK, gin.H{"token": authToken})
 	}
@@ -162,7 +175,7 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 			)
 
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responseServerError)
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 		} else {
@@ -173,7 +186,7 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 			)
 
 			if err != nil {
-				c.JSON(http.StatusInternalServerError, responseServerError)
+				c.JSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 		}
@@ -203,7 +216,7 @@ func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gi
 		params := url.Values{
 			"client_id":     {spotify_client_id},
 			"response_type": {"code"},
-			"redirect_uri":  {"http://localhost:7070/api/spotify_connect_callback"},
+			"redirect_uri":  {"http://localhost:7070/api/account/spotify_connect_callback"},
 			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing"},
 			"state":         {string(state)},
 		}
@@ -211,7 +224,7 @@ func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gi
 		final := endpoint + "?" + params.Encode()
 
 		// save the generated random state on the client
-		c.SetSameSite(http.SameSiteStrictMode)
+		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("spotify_connect_state", string(state), 300, "/", "", true, true)
 
 		c.JSON(http.StatusOK, gin.H{"redirect_url": final})
@@ -241,5 +254,40 @@ func HandlerSpotifyConnectCallback(database *db.Db, spotify_client_id, spotify_s
 			return
 		}
 
+		body := url.Values{
+			"grant_type":   {"authorization_code"},
+			"code":         {queryCode},
+			"redirect_uri": {"http://localhost:7070/api/account/spotify_connect_callback"},
+		}.Encode()
+
+		req, err := http.NewRequestWithContext(c, "POST", "https://accounts.spotify.com/api/token", strings.NewReader(body))
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+		AppendSpotifyBase64AuthCredentialsRequest(req, spotify_client_id, spotify_secret)
+
+		response, err := http.DefaultClient.Do(req)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		defer response.Body.Close()
+
+		var spotifyResponse spotifyTokenResponse
+
+		if err := json.NewDecoder(response.Body).Decode(&spotifyResponse); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		if response.StatusCode != 200 {
+			log.Printf("Spotify response code: %d, json payload: %v\n", response.StatusCode, spotifyResponse)
+			c.AbortWithStatusJSON(response.StatusCode, gin.H{"message": "Spotify error."})
+			return
+		}
 	}
 }
