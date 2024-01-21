@@ -3,7 +3,6 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
-	"fmt"
 	"net/http"
 	"os"
 
@@ -54,8 +53,9 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 		}
 
 		api.GET("/res", AuthNeeded(database), func(ctx *gin.Context) {
-			loggedInUser, _ := ctx.Get("current_user")
-			ctx.String(200, "you are logged in as: "+fmt.Sprintf("%+v", loggedInUser))
+			user := GetUserFromCtx(ctx)
+
+			ctx.String(200, "you are logged in as: "+user.String())
 		})
 	}
 
