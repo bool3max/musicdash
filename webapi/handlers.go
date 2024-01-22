@@ -192,6 +192,7 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 		}
 
 		// instruct client to clear cookie
+		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("auth_token", "", -1, "/", "", true, true)
 
 		// clear login auth info from context
