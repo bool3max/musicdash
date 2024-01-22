@@ -71,6 +71,24 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 	}
 }
 
+// Returns a Gin handler middleware that ensures that the user performing the current request
+// has a connected Spotify account that is currently properly authenticated. As such, this middleware
+// must be preceeded by the AuthNeeded middleware. If the user does not have a connected Spotify
+// account, the middleware properly aborts the request. If the user has a connected Spotify account
+// but it is currently not authenticated (i.e. the access token is expired), the middleware
+// attempts to refresh it. Upon successfull validation, the middleware attaches an instance of
+// db.SpotifyAuthParams to the existing db.User value in the current context.
+func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := GetUserFromCtx(c)
+		if user == nil {
+			// shoudln't ever really be the case
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+	}
+}
+
 // Gin handler for signing up using an email and password.
 func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -167,12 +185,8 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 
 		if everywhere {
 			// log out everywhere
-			current_user, _ := c.Get("current_user")
-
-			err := database.UserRevokeAllTokens(
-				c,
-				current_user.(db.User).Id,
-			)
+			user := GetUserFromCtx(c)
+			err := user.RevokeAllTokens(c)
 
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
@@ -180,7 +194,7 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 			}
 		} else {
 			// log out just this auth token
-			err := database.UserRevokeToken(
+			err := database.RevokeAuthToken(
 				c,
 				db.UserAuthToken(authToken),
 			)

@@ -22,7 +22,7 @@ var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrorPasswordIncorrect = errors.New("password incorrect")
 var ErrorInvalidAuthToken = errors.New("invalid auth token")
 
-type SpotifyAuthDetails struct {
+type SpotifyAuthParams struct {
 	AccessToken, RefreshToken string
 	ExpiresAt                 time.Time
 }
@@ -31,19 +31,30 @@ type User struct {
 	Id       uuid.UUID
 	Username string
 	Email    string
-	Spotify  SpotifyAuthDetails
+	Spotify  *SpotifyAuthParams
 }
 
 func (user *User) String() string {
 	return fmt.Sprintf("[id:{%s}, username:{%s}, email:{%s}]", user.Id.String(), user.Username, user.Email)
 }
 
+func (user *User) RevokeAllTokens(ctx context.Context) error {
+	_, err := Acquire().pool.Exec(
+		ctx,
+		`
+			delete from auth.auth_token
+			where auth.auth_token.userid=$1
+		`,
+		user.Id,
+	)
+
+	return err
+}
+
 // Validate the passed UserAuthToken and return an instance of the User that it belongs to.
 // If the passed auth. token is invalid (i.e. does not exist in the database), return an
 // ErrorInvalidAuthToken error and an empty User{} instance.
 func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (User, error) {
-	// TODO: fetching the user id and usre data could ofc be done from one db query,
-	// but as the user will in the future have much more data
 	newUser := User{}
 	err := db.pool.QueryRow(
 		ctx,
@@ -226,7 +237,7 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 }
 
 // Revoke a specific auth. token
-func (db *Db) UserRevokeToken(ctx context.Context, token UserAuthToken) error {
+func (db *Db) RevokeAuthToken(ctx context.Context, token UserAuthToken) error {
 	_, err := db.pool.Exec(
 		ctx,
 		`
@@ -234,20 +245,6 @@ func (db *Db) UserRevokeToken(ctx context.Context, token UserAuthToken) error {
 			where auth.auth_token.token = $1	
 		`,
 		token,
-	)
-
-	return err
-}
-
-// Revoke all active auth. tokens for the associated user
-func (db *Db) UserRevokeAllTokens(ctx context.Context, userId uuid.UUID) error {
-	_, err := db.pool.Exec(
-		ctx,
-		`
-			delete from auth.auth_token
-			where auth.auth_token.userid=$1
-		`,
-		userId,
 	)
 
 	return err
