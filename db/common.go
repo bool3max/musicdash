@@ -10,6 +10,12 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+var (
+	MUSICDASH_SPOTIFY_CLIENT_ID = os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID")
+	MUSICDASH_SPOTIFY_SECRET    = os.Getenv("MUSICDASH_SPOTIFY_SECRET")
+	MUSICDASH_DATABASE_URL      = os.Getenv("MUSICDASH_DATABASE_URL")
+)
+
 // One instance of a Db{} database object is present per running program.
 // The pointer to that main one is declared here in the "db" package. It is unexported, and is
 // initially nil.
@@ -24,7 +30,7 @@ type Db struct {
 // ptr to an existing instance, and instantiates it if already isn't.
 func Acquire() *Db {
 	if dbInstance == nil {
-		pool, err := pgxpool.New(context.TODO(), os.Getenv("MUSICDASH_DATABASE_URL"))
+		pool, err := pgxpool.New(context.TODO(), MUSICDASH_DATABASE_URL)
 		if err != nil {
 			log.Println("error acquiring database pgxpool connection: ", err)
 			os.Exit(1)

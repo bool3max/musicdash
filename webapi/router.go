@@ -4,7 +4,6 @@ import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
 	"net/http"
-	"os"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -42,13 +41,13 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 			// that returns a URI to Spotify's account auth. API
 			groupAccount.GET(
 				"/spotify_connect",
-				HandlerSpotifyConnectRedirect(database, os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID")),
+				HandlerSpotifyConnectRedirect(database),
 			)
 
 			// Spotify's auth. api then redirects the user back to this endpoint
 			groupAccount.GET(
 				"/spotify_connect_callback",
-				HandlerSpotifyConnectCallback(database, os.Getenv("MUSICDASH_SPOTIFY_CLIENT_ID"), os.Getenv("MUSICDASH_SPOTIFY_SECRET")),
+				HandlerSpotifyConnectCallback(database),
 			)
 		}
 
