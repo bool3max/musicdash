@@ -4,9 +4,13 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/base64"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -27,11 +31,93 @@ type SpotifyAuthParams struct {
 	ExpiresAt                 time.Time
 }
 
+func (spotify *SpotifyAuthParams) Refresh() error {
+	// access token still valid, no need to refresh
+	if time.Now().Before(spotify.ExpiresAt) {
+		return nil
+	}
+
+	fmt.Println("REFRESHING TOKEN...")
+
+	body := url.Values{
+		"grant_type":    {"refresh_token"},
+		"refresh_token": {spotify.RefreshToken},
+	}.Encode()
+
+	req, err := http.NewRequest("POST", "https://accounts.spotify.com/api/token", strings.NewReader(body))
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(MUSICDASH_SPOTIFY_CLIENT_ID+":"+MUSICDASH_SPOTIFY_SECRET)))
+
+	response, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return nil
+	}
+
+	defer response.Body.Close()
+
+	var spotifyResponse struct {
+		Access_token  string `json:"access_token"`
+		Token_type    string `json:"token_type"`
+		Scope         string `json:"scope"`
+		Expires_in    int    `json:"expires_in"`
+		Refresh_token string `json:"refresh_token"`
+	}
+
+	if err := json.NewDecoder(response.Body).Decode(&spotifyResponse); err != nil {
+		return err
+	}
+
+	if response.StatusCode != 200 {
+		return errors.New("error refreshing spotify access token")
+	}
+
+	*spotify = SpotifyAuthParams{
+		AccessToken:  spotifyResponse.Access_token,
+		RefreshToken: spotify.RefreshToken,
+		ExpiresAt:    time.Now().Add(time.Duration(spotifyResponse.Expires_in) * time.Second),
+	}
+
+	// a new refresh token isn't always returned - only save it if a new one has been returned
+	if spotifyResponse.Refresh_token != "" {
+		spotify.RefreshToken = spotifyResponse.Refresh_token
+	}
+
+	return nil
+}
+
 type User struct {
 	Id       uuid.UUID
 	Username string
 	Email    string
 	Spotify  *SpotifyAuthParams
+}
+
+// Preserve the current parameters in user.Spotify to the database unconditionally.
+func (user *User) SaveSpotifyAuthParams(ctx context.Context) error {
+	if user.Spotify == nil {
+		return nil
+	}
+
+	_, err := Acquire().pool.Exec(
+		ctx,
+		`
+			insert into auth.spotify_token
+			(userid, accesstoken, refreshtoken, expiresat)
+			values ($1, $2, $3, $4)
+			on conflict on constraint spotify_token_pk do update
+			set accesstoken=$2, refreshtoken=$3, expiresat=$4
+		`,
+		user.Id,
+		user.Spotify.AccessToken,
+		user.Spotify.RefreshToken,
+		user.Spotify.ExpiresAt,
+	)
+
+	return err
 }
 
 func (user *User) String() string {

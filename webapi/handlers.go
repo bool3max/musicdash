@@ -12,15 +12,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jackc/pgx/v5"
 )
-
-type spotifyTokenResponse struct {
-	Access_token  string `json:"access_token"`
-	Token_type    string `json:"token_type"`
-	Scope         string `json:"scope"`
-	Expires_in    int    `json:"expires_in"`
-	Refresh_token string `json:"refresh_token"`
-}
 
 type SignupCredRequestData struct {
 	Username string `binding:"required"`
@@ -73,17 +66,45 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 
 // Returns a Gin handler middleware that ensures that the user performing the current request
 // has a connected Spotify account that is currently properly authenticated. As such, this middleware
-// must be preceeded by the AuthNeeded middleware. If the user does not have a connected Spotify
-// account, the middleware properly aborts the request. If the user has a connected Spotify account
+// must be preceeded by the AuthNeeded middleware. If the user has a connected Spotify account
 // but it is currently not authenticated (i.e. the access token is expired), the middleware
 // attempts to refresh it. Upon successfull validation, the middleware attaches an instance of
 // db.SpotifyAuthParams to the existing db.User value in the current context.
 func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := GetUserFromCtx(c)
-		if user == nil {
-			// shoudln't ever really be the case
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+		authParams := db.SpotifyAuthParams{}
+
+		err := database.Pool().QueryRow(
+			c,
+			`
+				select accesstoken, refreshtoken, expiresat
+				from auth.spotify_token
+				where userid=$1
+			`,
+			user.Id,
+		).Scan(&authParams.AccessToken, &authParams.RefreshToken, &authParams.ExpiresAt)
+
+		if err != nil {
+			if err == pgx.ErrNoRows {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "ERROR_SPOTIFY_UNAUTHENTICATED"})
+			} else {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			}
+
+			return
+		}
+
+		// refresh token if expired
+		if err = authParams.Refresh(); err != nil {
+			log.Println(err)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
+			return
+		}
+
+		user.Spotify = &authParams
+		if err = user.SaveSpotifyAuthParams(c); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
 			return
 		}
 	}
@@ -217,7 +238,7 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 	}
 }
 
-func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gin.HandlerFunc {
+func HandlerSpotifyConnectRedirect(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// generate random string for state parameter
 		var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
@@ -229,7 +250,7 @@ func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gi
 
 		endpoint := "https://accounts.spotify.com/authorize"
 		params := url.Values{
-			"client_id":     {spotify_client_id},
+			"client_id":     {db.MUSICDASH_SPOTIFY_CLIENT_ID},
 			"response_type": {"code"},
 			"redirect_uri":  {"http://localhost:7070/api/account/spotify_connect_callback"},
 			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing"},
@@ -246,8 +267,10 @@ func HandlerSpotifyConnectRedirect(database *db.Db, spotify_client_id string) gi
 	}
 }
 
-func HandlerSpotifyConnectCallback(database *db.Db, spotify_client_id, spotify_secret string) gin.HandlerFunc {
+func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		user := GetUserFromCtx(c)
+
 		queryState := c.Query("state")
 		queryCode := c.Query("code")
 		queryErr := c.Query("error")
@@ -282,7 +305,7 @@ func HandlerSpotifyConnectCallback(database *db.Db, spotify_client_id, spotify_s
 		}
 
 		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		AppendSpotifyBase64AuthCredentialsRequest(req, spotify_client_id, spotify_secret)
+		AppendSpotifyBase64AuthCredentialsRequest(req, db.MUSICDASH_SPOTIFY_CLIENT_ID, db.MUSICDASH_SPOTIFY_SECRET)
 
 		response, err := http.DefaultClient.Do(req)
 		if err != nil {
@@ -292,7 +315,13 @@ func HandlerSpotifyConnectCallback(database *db.Db, spotify_client_id, spotify_s
 
 		defer response.Body.Close()
 
-		var spotifyResponse spotifyTokenResponse
+		var spotifyResponse struct {
+			Access_token  string `json:"access_token"`
+			Token_type    string `json:"token_type"`
+			Scope         string `json:"scope"`
+			Expires_in    int    `json:"expires_in"`
+			Refresh_token string `json:"refresh_token"`
+		}
 
 		if err := json.NewDecoder(response.Body).Decode(&spotifyResponse); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
@@ -300,8 +329,21 @@ func HandlerSpotifyConnectCallback(database *db.Db, spotify_client_id, spotify_s
 		}
 
 		if response.StatusCode != 200 {
-			log.Printf("Spotify response code: %d, json payload: %v\n", response.StatusCode, spotifyResponse)
-			c.AbortWithStatusJSON(response.StatusCode, gin.H{"message": "Spotify error."})
+			log.Printf("Error request Spotify access token: Spotify response code: %d, json payload: %v\n", response.StatusCode, spotifyResponse)
+			c.AbortWithStatusJSON(response.StatusCode, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
+			return
+		}
+
+		// save the newly constructed db.SpotifyAuthParams into the currently authenticated db.User instance
+		user.Spotify = &db.SpotifyAuthParams{
+			ExpiresAt:    time.Now().Add(time.Second * time.Duration(spotifyResponse.Expires_in)),
+			AccessToken:  spotifyResponse.Access_token,
+			RefreshToken: spotifyResponse.Refresh_token,
+		}
+
+		// presreve the spotify auth params into the database
+		if err := user.SaveSpotifyAuthParams(c); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 	}

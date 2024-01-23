@@ -56,6 +56,10 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 
 			ctx.String(200, "you are logged in as: "+user.String())
 		})
+
+		api.GET("/spotify/res", AuthNeeded(database), SpotifyAuthNeeded(database), func(c *gin.Context) {
+			c.String(200, "some spotify resource")
+		})
 	}
 
 	router.Use(static.ServeRoot("/", "./webapp"))
