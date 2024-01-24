@@ -31,17 +31,24 @@ type SpotifyAuthParams struct {
 	ExpiresAt                 time.Time
 }
 
-func (spotify *SpotifyAuthParams) Refresh() error {
+// Basic information about a Spotify user profile
+type SpotifyUserProfile struct {
+	DisplayName                       string
+	FollowerCount                     int
+	ProfileUri                        string
+	ProfileImgUrl                     string
+	ProfileImgWidth, ProfileImgHeight int
+}
+
+func (spotifyParmas *SpotifyAuthParams) Refresh() error {
 	// access token still valid, no need to refresh
-	if time.Now().Before(spotify.ExpiresAt) {
+	if time.Now().Before(spotifyParmas.ExpiresAt) {
 		return nil
 	}
 
-	fmt.Println("REFRESHING TOKEN...")
-
 	body := url.Values{
 		"grant_type":    {"refresh_token"},
-		"refresh_token": {spotify.RefreshToken},
+		"refresh_token": {spotifyParmas.RefreshToken},
 	}.Encode()
 
 	req, err := http.NewRequest("POST", "https://accounts.spotify.com/api/token", strings.NewReader(body))
@@ -75,18 +82,22 @@ func (spotify *SpotifyAuthParams) Refresh() error {
 		return errors.New("error refreshing spotify access token")
 	}
 
-	*spotify = SpotifyAuthParams{
+	*spotifyParmas = SpotifyAuthParams{
 		AccessToken:  spotifyResponse.Access_token,
-		RefreshToken: spotify.RefreshToken,
+		RefreshToken: spotifyParmas.RefreshToken,
 		ExpiresAt:    time.Now().Add(time.Duration(spotifyResponse.Expires_in) * time.Second),
 	}
 
 	// a new refresh token isn't always returned - only save it if a new one has been returned
 	if spotifyResponse.Refresh_token != "" {
-		spotify.RefreshToken = spotifyResponse.Refresh_token
+		spotifyParmas.RefreshToken = spotifyResponse.Refresh_token
 	}
 
 	return nil
+}
+
+func (spotifyParmas *SpotifyAuthParams) GetUserProfile() SpotifyUserProfile {
+
 }
 
 type User struct {
