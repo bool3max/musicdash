@@ -32,6 +32,10 @@ const (
 	AuthorizationCode = iota
 )
 
+var (
+	ErrInvalidAuthFlowForRequest = errors.New("invalid client authentication flow for request")
+)
+
 // An authenticated client used to interact with the API
 type Client struct {
 	// type of flow used to authenticate current client
@@ -513,4 +517,46 @@ func (spot *Client) GetAlbumTracklist(album *music.Album) ([]music.Track, error)
 	}
 
 	return albumTracks, nil
+}
+
+func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
+	if spot.flowType != AuthorizationCode {
+		return UserProfile{}, ErrInvalidAuthFlowForRequest
+	}
+
+	var response struct {
+		Country     string `json:"country"`
+		DisplayName string `json:"display_name"`
+		Email       string `json:"email"`
+		Followers   struct {
+			Total int `json:"total"`
+		} `json:"followers"`
+		Images       []image `json:"images"`
+		Uri          string  `json:"uri"`
+		ExternalUrls struct {
+			Spotify string `json:"spotify"`
+		} `json:"external_urls"`
+	}
+
+	if err := spot.jsonGetHelper("https://api.spotify.com/v1/me", &response); err != nil {
+		return UserProfile{}, err
+	}
+
+	newUserProfile := UserProfile{
+		DisplayName:   response.DisplayName,
+		FollowerCount: uint(response.Followers.Total),
+		ProfileUri:    response.Uri,
+		ProfileUrl:    response.ExternalUrls.Spotify,
+		ProfileImages: make([]music.MusicImage, len(response.Images)),
+	}
+
+	for idx, img := range response.Images {
+		newUserProfile.ProfileImages[idx] = music.MusicImage{
+			Height: int(img.Height),
+			Width:  int(img.Width),
+			Url:    img.Url,
+		}
+	}
+
+	return newUserProfile, nil
 }

@@ -192,3 +192,11 @@ type searchResponse struct {
 		Limit  int    `json:"limit"`
 	}
 }
+
+type UserProfile struct {
+	DisplayName   string
+	FollowerCount uint
+	ProfileUri    string
+	ProfileUrl    string
+	ProfileImages []music.MusicImage
+}

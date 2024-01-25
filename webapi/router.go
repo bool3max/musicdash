@@ -3,6 +3,7 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-contrib/static"
@@ -51,14 +52,27 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 			)
 		}
 
+		groupSpotify := api.Group("/spotify")
+		groupSpotify.Use(AuthNeeded(database), SpotifyAuthNeeded(database))
+		{
+			groupSpotify.GET("/myProfile", func(c *gin.Context) {
+				currentAccount := GetUserFromCtx(c)
+				spot := currentAccount.Spotify
+
+				accountDetails, err := spot.GetCurrentUserProfile()
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					return
+				}
+
+				c.String(http.StatusOK, fmt.Sprintf("%+v", accountDetails))
+			})
+		}
+
 		api.GET("/res", AuthNeeded(database), func(ctx *gin.Context) {
 			user := GetUserFromCtx(ctx)
 
 			ctx.String(200, "you are logged in as: "+user.String())
-		})
-
-		api.GET("/spotify/res", AuthNeeded(database), SpotifyAuthNeeded(database), func(c *gin.Context) {
-			c.String(200, "some spotify resource")
 		})
 	}
 

@@ -22,15 +22,6 @@ var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrorPasswordIncorrect = errors.New("password incorrect")
 var ErrorInvalidAuthToken = errors.New("invalid auth token")
 
-// Basic information about a Spotify user profile
-type SpotifyUserProfile struct {
-	DisplayName                       string
-	FollowerCount                     int
-	ProfileUri                        string
-	ProfileImgUrl                     string
-	ProfileImgWidth, ProfileImgHeight int
-}
-
 type User struct {
 	Id       uuid.UUID
 	Username string
