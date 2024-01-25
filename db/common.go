@@ -1,11 +1,9 @@
 package db
 
 import (
-	music "bool3max/musicdash/music"
 	"context"
 	"log"
 	"os"
-	"strings"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -49,13 +47,4 @@ func (db *Db) Close() {
 // return the underlying pool
 func (db *Db) Pool() *pgxpool.Pool {
 	return db.pool
-}
-
-func IncludeGroupToString(group []music.AlbumType) string {
-	as_strings := make([]string, 0, len(group))
-	for _, g := range group {
-		as_strings = append(as_strings, string(g))
-	}
-
-	return strings.Join(as_strings, ",")
 }

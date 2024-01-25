@@ -6,6 +6,7 @@ import (
 	"context"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -19,6 +20,15 @@ const (
 	AlbumCompilation AlbumType = "compilation"
 	AlbumSingle      AlbumType = "single"
 )
+
+func IncludeGroupToString(group []AlbumType) string {
+	as_strings := make([]string, 0, len(group))
+	for _, g := range group {
+		as_strings = append(as_strings, string(g))
+	}
+
+	return strings.Join(as_strings, ",")
+}
 
 // A visual representation of a Spotify resource identified by a Spotify ID.
 // MusicImage.Data[] stores binary data of the image and may be empty (nil) if the
