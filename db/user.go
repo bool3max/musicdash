@@ -1,17 +1,13 @@
 package db
 
 import (
+	"bool3max/musicdash/spotify"
 	"context"
 	"crypto/rand"
 	"encoding/base64"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
-	"net/http"
-	"net/url"
-	"strings"
-	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -26,11 +22,6 @@ var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrorPasswordIncorrect = errors.New("password incorrect")
 var ErrorInvalidAuthToken = errors.New("invalid auth token")
 
-type SpotifyAuthParams struct {
-	AccessToken, RefreshToken string
-	ExpiresAt                 time.Time
-}
-
 // Basic information about a Spotify user profile
 type SpotifyUserProfile struct {
 	DisplayName                       string
@@ -40,71 +31,11 @@ type SpotifyUserProfile struct {
 	ProfileImgWidth, ProfileImgHeight int
 }
 
-func (spotifyParmas *SpotifyAuthParams) Refresh() error {
-	// access token still valid, no need to refresh
-	if time.Now().Before(spotifyParmas.ExpiresAt) {
-		return nil
-	}
-
-	body := url.Values{
-		"grant_type":    {"refresh_token"},
-		"refresh_token": {spotifyParmas.RefreshToken},
-	}.Encode()
-
-	req, err := http.NewRequest("POST", "https://accounts.spotify.com/api/token", strings.NewReader(body))
-	if err != nil {
-		return err
-	}
-
-	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-	req.Header.Add("Authorization", "Basic "+base64.StdEncoding.EncodeToString([]byte(MUSICDASH_SPOTIFY_CLIENT_ID+":"+MUSICDASH_SPOTIFY_SECRET)))
-
-	response, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return nil
-	}
-
-	defer response.Body.Close()
-
-	var spotifyResponse struct {
-		Access_token  string `json:"access_token"`
-		Token_type    string `json:"token_type"`
-		Scope         string `json:"scope"`
-		Expires_in    int    `json:"expires_in"`
-		Refresh_token string `json:"refresh_token"`
-	}
-
-	if err := json.NewDecoder(response.Body).Decode(&spotifyResponse); err != nil {
-		return err
-	}
-
-	if response.StatusCode != 200 {
-		return errors.New("error refreshing spotify access token")
-	}
-
-	*spotifyParmas = SpotifyAuthParams{
-		AccessToken:  spotifyResponse.Access_token,
-		RefreshToken: spotifyParmas.RefreshToken,
-		ExpiresAt:    time.Now().Add(time.Duration(spotifyResponse.Expires_in) * time.Second),
-	}
-
-	// a new refresh token isn't always returned - only save it if a new one has been returned
-	if spotifyResponse.Refresh_token != "" {
-		spotifyParmas.RefreshToken = spotifyResponse.Refresh_token
-	}
-
-	return nil
-}
-
-func (spotifyParmas *SpotifyAuthParams) GetUserProfile() SpotifyUserProfile {
-
-}
-
 type User struct {
 	Id       uuid.UUID
 	Username string
 	Email    string
-	Spotify  *SpotifyAuthParams
+	Spotify  *spotify.Client
 }
 
 // Preserve the current parameters in user.Spotify to the database unconditionally.

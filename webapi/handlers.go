@@ -2,13 +2,12 @@ package webapi
 
 import (
 	"bool3max/musicdash/db"
-	"encoding/json"
+	"bool3max/musicdash/spotify"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/mail"
 	"net/url"
-	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -73,7 +72,9 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := GetUserFromCtx(c)
-		authParams := db.SpotifyAuthParams{}
+
+		var accessToken, refreshToken string
+		var expiresAt time.Time
 
 		err := database.Pool().QueryRow(
 			c,
@@ -83,7 +84,7 @@ func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 				where userid=$1
 			`,
 			user.Id,
-		).Scan(&authParams.AccessToken, &authParams.RefreshToken, &authParams.ExpiresAt)
+		).Scan(&accessToken, &refreshToken, &expiresAt)
 
 		if err != nil {
 			if err == pgx.ErrNoRows {
@@ -95,14 +96,24 @@ func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		// refresh token if expired
-		if err = authParams.Refresh(); err != nil {
+		userSpotifyClient := spotify.AuthorizationCodeFromParams(
+			db.MUSICDASH_SPOTIFY_CLIENT_ID,
+			db.MUSICDASH_SPOTIFY_SECRET,
+			accessToken,
+			refreshToken,
+			expiresAt,
+		)
+
+		// refresh access token
+		if _, err = userSpotifyClient.Refresh(); err != nil {
 			log.Println(err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
 			return
 		}
 
-		user.Spotify = &authParams
+		// save spotify client instance to db.User instance for future handlers to make use of
+		user.Spotify = userSpotifyClient
+		// save potentially-refreshed parameters of client to database
 		if err = user.SaveSpotifyAuthParams(c); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
 			return
@@ -292,54 +303,19 @@ func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		body := url.Values{
-			"grant_type":   {"authorization_code"},
-			"code":         {queryCode},
-			"redirect_uri": {"http://localhost:7070/api/account/spotify_connect_callback"},
-		}.Encode()
+		// authenticate new spotify.Client using auth. code flow with the code response
+		userSpotifyClient, err := spotify.NewAuthorizationCode(
+			db.MUSICDASH_SPOTIFY_CLIENT_ID,
+			db.MUSICDASH_SPOTIFY_SECRET,
+			queryCode,
+		)
 
-		req, err := http.NewRequestWithContext(c, "POST", "https://accounts.spotify.com/api/token", strings.NewReader(body))
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
 			return
 		}
 
-		req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
-		AppendSpotifyBase64AuthCredentialsRequest(req, db.MUSICDASH_SPOTIFY_CLIENT_ID, db.MUSICDASH_SPOTIFY_SECRET)
-
-		response, err := http.DefaultClient.Do(req)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
-			return
-		}
-
-		defer response.Body.Close()
-
-		var spotifyResponse struct {
-			Access_token  string `json:"access_token"`
-			Token_type    string `json:"token_type"`
-			Scope         string `json:"scope"`
-			Expires_in    int    `json:"expires_in"`
-			Refresh_token string `json:"refresh_token"`
-		}
-
-		if err := json.NewDecoder(response.Body).Decode(&spotifyResponse); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
-			return
-		}
-
-		if response.StatusCode != 200 {
-			log.Printf("Error request Spotify access token: Spotify response code: %d, json payload: %v\n", response.StatusCode, spotifyResponse)
-			c.AbortWithStatusJSON(response.StatusCode, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
-			return
-		}
-
-		// save the newly constructed db.SpotifyAuthParams into the currently authenticated db.User instance
-		user.Spotify = &db.SpotifyAuthParams{
-			ExpiresAt:    time.Now().Add(time.Second * time.Duration(spotifyResponse.Expires_in)),
-			AccessToken:  spotifyResponse.Access_token,
-			RefreshToken: spotifyResponse.Refresh_token,
-		}
+		user.Spotify = userSpotifyClient
 
 		// presreve the spotify auth params into the database
 		if err := user.SaveSpotifyAuthParams(c); err != nil {
