@@ -548,6 +548,8 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 		ProfileUri:    response.Uri,
 		ProfileUrl:    response.ExternalUrls.Spotify,
 		ProfileImages: make([]music.MusicImage, len(response.Images)),
+		Country:       response.Country,
+		Email:         response.Email,
 	}
 
 	for idx, img := range response.Images {

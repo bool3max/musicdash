@@ -195,8 +195,10 @@ type searchResponse struct {
 
 type UserProfile struct {
 	DisplayName   string
+	Email         string
 	FollowerCount uint
 	ProfileUri    string
 	ProfileUrl    string
 	ProfileImages []music.MusicImage
+	Country       string
 }
