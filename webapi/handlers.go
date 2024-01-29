@@ -3,6 +3,7 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/spotify"
+	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -264,7 +265,7 @@ func HandlerSpotifyConnectRedirect(database *db.Db) gin.HandlerFunc {
 			"client_id":     {db.MUSICDASH_SPOTIFY_CLIENT_ID},
 			"response_type": {"code"},
 			"redirect_uri":  {"http://localhost:7070/api/account/spotify_connect_callback"},
-			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing"},
+			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-email user-read-private"},
 			"state":         {string(state)},
 		}
 
@@ -319,6 +320,18 @@ func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
 
 		// presreve the spotify auth params into the database
 		if err := user.SaveSpotifyAuthParams(c); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		spotifyProfile, err := user.Spotify.GetCurrentUserProfile()
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		if err = user.AssociateSpotifyProfile(c, spotifyProfile); err != nil {
+			fmt.Println(err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
