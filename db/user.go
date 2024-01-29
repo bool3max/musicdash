@@ -268,3 +268,30 @@ func (db *Db) RevokeAuthToken(ctx context.Context, token UserAuthToken) error {
 
 	return err
 }
+
+// Associate/link a Spotify user profile with a musicdash account. This should only be done once the user
+// properly authenticates with Spotify. This function inserts a new record into the auth.user_spotify
+// table.
+func (db *Db) UserAssociateSpotifyProfile(ctx context.Context, userId uuid.UUID, spotifyProfile spotify.UserProfile) error {
+	_, err := db.pool.Exec(
+		ctx,
+		`
+			insert into auth.user_spotify
+			(userid, spotify_displayname, spotify_followers, spotify_uri, profile_image_url, profile_image_width, profile_image_height, country, spotify_email)
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+			on conflict on constraint user_spotify_pk do update
+			set spotify_displayname=$2, spotify_followers=$3, spotify_uri=$4, profile_image_url=$5, profile_image_width=$6, profile_image_height=$7, country=$8, spotify_email=$9
+		`,
+		userId,
+		spotifyProfile.DisplayName,
+		spotifyProfile.FollowerCount,
+		spotifyProfile.ProfileUri,
+		spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Url,
+		spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Width,
+		spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Height,
+		spotifyProfile.Country,
+		spotifyProfile.Email,
+	)
+
+	return err
+}
