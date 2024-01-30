@@ -194,6 +194,7 @@ type searchResponse struct {
 }
 
 type UserProfile struct {
+	SpotifyId     string
 	DisplayName   string
 	Email         string
 	FollowerCount uint

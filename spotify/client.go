@@ -525,6 +525,7 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 	}
 
 	var response struct {
+		Id          string `json:"id"`
 		Country     string `json:"country"`
 		DisplayName string `json:"display_name"`
 		Email       string `json:"email"`
@@ -543,6 +544,7 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 	}
 
 	newUserProfile := UserProfile{
+		SpotifyId:     response.Id,
 		DisplayName:   response.DisplayName,
 		FollowerCount: uint(response.Followers.Total),
 		ProfileUri:    response.Uri,

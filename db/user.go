@@ -22,7 +22,7 @@ type UserAuthToken string
 var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrorPasswordIncorrect = errors.New("password incorrect")
 var ErrorInvalidAuthToken = errors.New("invalid auth token")
-var ErrorSpotifyProfileNotLinked = errors.New("user has no linked spotify profile")
+var ErrSpotifyProfileNotLinked = errors.New("user has no linked spotify profile")
 
 type User struct {
 	Id       uuid.UUID
@@ -56,17 +56,19 @@ func (user *User) SaveSpotifyAuthParams(ctx context.Context) error {
 }
 
 // Associate/link a Spotify user profile with a musicdash account. This should only be done once the user
-// properly authenticates with Spotify. This function inserts a new record into the auth.user_spotify
-// table.
-func (user *User) AssociateSpotifyProfile(ctx context.Context, spotifyProfile spotify.UserProfile) error {
+// properly authenticates with Spotify. The user cannot have more than one linked Spotify account per
+// musicdash account. If there's already a linked Spotify account for the user, this function overwrites
+// the record in auth.user_spotify, effectively removing the previously linked Spotify account and
+// linking the new one.
+func (user *User) LinkSpotifyProfile(ctx context.Context, spotifyProfile spotify.UserProfile) error {
 	_, err := Acquire().pool.Exec(
 		ctx,
 		`
 			insert into auth.user_spotify
-			(userid, spotify_displayname, spotify_followers, spotify_uri, profile_image_url, profile_image_width, profile_image_height, country, spotify_email, spotify_url)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			(userid, spotify_displayname, spotify_followers, spotify_uri, profile_image_url, profile_image_width, profile_image_height, country, spotify_email, spotify_url, spotify_id)
+			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 			on conflict on constraint user_spotify_pk do update
-			set spotify_displayname=$2, spotify_followers=$3, spotify_uri=$4, profile_image_url=$5, profile_image_width=$6, profile_image_height=$7, country=$8, spotify_email=$9, spotify_url=$10
+			set spotify_displayname=$2, spotify_followers=$3, spotify_uri=$4, profile_image_url=$5, profile_image_width=$6, profile_image_height=$7, country=$8, spotify_email=$9, spotify_url=$10, spotify_id=$11
 		`,
 		user.Id,
 		spotifyProfile.DisplayName,
@@ -78,6 +80,20 @@ func (user *User) AssociateSpotifyProfile(ctx context.Context, spotifyProfile sp
 		spotifyProfile.Country,
 		spotifyProfile.Email,
 		spotifyProfile.ProfileUrl,
+		spotifyProfile.SpotifyId,
+	)
+
+	return err
+}
+
+func (user *User) UnlinkSpotifyProfile(ctx context.Context) error {
+	_, err := Acquire().pool.Exec(
+		ctx,
+		`
+			delete from auth.user_spotify
+			where userid=$1
+		`,
+		user.Id,
 	)
 
 	return err
@@ -90,16 +106,16 @@ func (user *User) GetLinkedSpotifyProfile(ctx context.Context) (spotify.UserProf
 	err := Acquire().pool.QueryRow(
 		ctx,
 		`
-			select spotify_displayname, spotify_followers, spotify_uri, spotify_url, profile_image_url, profile_image_width, profile_image_height, country, spotify_email
+			select spotify_id, spotify_displayname, spotify_followers, spotify_uri, spotify_url, profile_image_url, profile_image_width, profile_image_height, country, spotify_email
 			from auth.user_spotify
 			where userid=$1
 		`,
 		user.Id,
-	).Scan(&profile.DisplayName, &profile.FollowerCount, &profile.ProfileUri, &profile.ProfileUrl, &profile.ProfileImages[0].Url, &profile.ProfileImages[0].Width, &profile.ProfileImages[0].Height, &profile.Country, &profile.Email)
+	).Scan(&profile.SpotifyId, &profile.DisplayName, &profile.FollowerCount, &profile.ProfileUri, &profile.ProfileUrl, &profile.ProfileImages[0].Url, &profile.ProfileImages[0].Width, &profile.ProfileImages[0].Height, &profile.Country, &profile.Email)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return profile, ErrorSpotifyProfileNotLinked
+			return profile, ErrSpotifyProfileNotLinked
 		}
 
 		return profile, err
