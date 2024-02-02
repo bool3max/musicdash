@@ -8,7 +8,6 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
-	"log"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -159,10 +158,10 @@ func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (Us
 		if err == pgx.ErrNoRows {
 			// auth token not in database
 			return newUser, ErrInvalidAuthToken
-		} else {
-			// other db error
-			return newUser, err
 		}
+
+		// other db error
+		return newUser, err
 	}
 
 	err = db.pool.QueryRow(
@@ -198,14 +197,27 @@ func (db *Db) UsernameIsRegistered(ctx context.Context, username string) (bool, 
 	}
 }
 
-func (db *Db) UserInsert(username, password, email string) error {
+// Check if there is a registered account with the specified email already in the database
+func (db *Db) EmailIsRegistered(ctx context.Context, email string) (bool, error) {
+	err := db.pool.QueryRow(ctx, "select email from auth.user where email=$1 limit 1", email).Scan(nil)
+
+	switch err {
+	case pgx.ErrNoRows:
+		return false, nil
+	case nil:
+		return true, nil
+	default:
+		return false, err
+	}
+}
+
+// Insert a new user into the database. Returns the user id of the new user.
+func (db *Db) UserInsert(username, password, email string) (uuid.UUID, error) {
 	// generate new uuid-v4 identifier for user
 	userUuid, err := uuid.NewRandom()
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
-
-	log.Printf("signup: new UUIDv4 for user {%s} = %s\n", username, userUuid.String())
 
 	pwdAsBytes := []byte(password)
 
@@ -214,11 +226,9 @@ func (db *Db) UserInsert(username, password, email string) error {
 	pwdToHash = append(pwdToHash, userUuid[:]...)
 	pwdToHash = append(pwdToHash, pwdAsBytes...)
 
-	log.Printf("signup: pwdToHash len: %v\n", len(pwdToHash))
-
 	pwdHash, err := bcrypt.GenerateFromPassword(pwdToHash, bcrypt.DefaultCost)
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 
 	sqlQueryInsertNewUser := `
@@ -237,10 +247,10 @@ func (db *Db) UserInsert(username, password, email string) error {
 	)
 
 	if err != nil {
-		return err
+		return uuid.UUID{}, err
 	}
 
-	return nil
+	return userUuid, nil
 }
 
 // Attempt to login the user based on an email and password. If the credentials match,
@@ -294,14 +304,14 @@ func (db *Db) UserLoginCred(ctx context.Context, passwordGuess, email string) (U
 		return "", ErrPasswordIncorrect
 	}
 
-	return db.UserLogin(ctx, userId)
+	return db.UserNewAuthToken(ctx, userId)
 }
 
 // Unconditionally log-in an user. The function generates a new valid UserAuthToken, saves it in the
 // database, and returns it. The function doesn't check if the passed userId is valid, and attempts
 // to insert it into auth.auth_token, which will of course fail on an invalid user id due to the
 // foreign key constraint.
-func (db *Db) UserLogin(ctx context.Context, userId uuid.UUID) (UserAuthToken, error) {
+func (db *Db) UserNewAuthToken(ctx context.Context, userId uuid.UUID) (UserAuthToken, error) {
 	// generate new random 64 bytes to use as auth token
 	authToken := make([]byte, 64)
 	_, err := rand.Read(authToken)
