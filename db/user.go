@@ -250,7 +250,7 @@ func (db *Db) UserInsert(username, password, email string) error {
 // After a successful login, the generated AuthToken is saved in the database and facilitates a valid
 // session for that particular user account. Valid AuthToken(s) in the database have no expiration date
 // and last indefinitely - that is until the user logs out.
-func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserAuthToken, error) {
+func (db *Db) UserLoginCred(ctx context.Context, passwordGuess, email string) (UserAuthToken, error) {
 	passwordGuessBytes := []byte(passwordGuess)
 
 	row := db.pool.QueryRow(
@@ -291,21 +291,30 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 	err = bcrypt.CompareHashAndPassword(pwdHashDb, passwordGuessSaltedBytes)
 	// passwords do not match
 	if err != nil {
-		log.Printf("error comparing passwords: %v\n", err)
 		return "", ErrPasswordIncorrect
 	}
 
-	// passwords match, generate auth token
+	return db.UserLogin(ctx, userId)
+}
+
+// Unconditionally log-in an user. The function generates a new valid UserAuthToken, saves it in the
+// database, and returns it. The function doesn't check if the passed userId is valid, and attempts
+// to insert it into auth.auth_token, which will of course fail on an invalid user id due to the
+// foreign key constraint.
+func (db *Db) UserLogin(ctx context.Context, userId uuid.UUID) (UserAuthToken, error) {
+	// generate new random 64 bytes to use as auth token
 	authToken := make([]byte, 64)
-	_, err = rand.Read(authToken)
+	_, err := rand.Read(authToken)
 	if err != nil {
 		return "", err
 	}
 
+	// encode as base64 string
 	authTokenB64 := base64.StdEncoding.EncodeToString(authToken)
 
 	// insert the generated auth token into the database
 
+	// preserve token into database
 	_, err = db.pool.Exec(
 		ctx,
 		`
