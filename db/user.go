@@ -19,9 +19,9 @@ import (
 // encoded in base64 format and stored as a string in the database.
 type UserAuthToken string
 
-var ErrorEmailNotRegistered = errors.New("e-mail does not exist in database")
-var ErrorPasswordIncorrect = errors.New("password incorrect")
-var ErrorInvalidAuthToken = errors.New("invalid auth token")
+var ErrEmailNotRegistered = errors.New("e-mail does not exist in database")
+var ErrPasswordIncorrect = errors.New("password incorrect")
+var ErrInvalidAuthToken = errors.New("invalid auth token")
 var ErrSpotifyProfileNotLinked = errors.New("user has no linked spotify profile")
 
 type User struct {
@@ -57,9 +57,7 @@ func (user *User) SaveSpotifyAuthParams(ctx context.Context) error {
 
 // Associate/link a Spotify user profile with a musicdash account. This should only be done once the user
 // properly authenticates with Spotify. The user cannot have more than one linked Spotify account per
-// musicdash account. If there's already a linked Spotify account for the user, this function overwrites
-// the record in auth.user_spotify, effectively removing the previously linked Spotify account and
-// linking the new one.
+// musicdash account.
 func (user *User) LinkSpotifyProfile(ctx context.Context, spotifyProfile spotify.UserProfile) error {
 	_, err := Acquire().pool.Exec(
 		ctx,
@@ -160,7 +158,7 @@ func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (Us
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			// auth token not in database
-			return newUser, ErrorInvalidAuthToken
+			return newUser, ErrInvalidAuthToken
 		} else {
 			// other db error
 			return newUser, err
@@ -278,7 +276,7 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "", ErrorEmailNotRegistered
+			return "", ErrEmailNotRegistered
 		} else {
 			return "", err
 		}
@@ -294,7 +292,7 @@ func (db *Db) UserLogin(ctx context.Context, passwordGuess, email string) (UserA
 	// passwords do not match
 	if err != nil {
 		log.Printf("error comparing passwords: %v\n", err)
-		return "", ErrorPasswordIncorrect
+		return "", ErrPasswordIncorrect
 	}
 
 	// passwords match, generate auth token
