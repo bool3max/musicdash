@@ -144,7 +144,7 @@ func (user *User) RevokeAllTokens(ctx context.Context) error {
 // If the passed auth. token is invalid (i.e. does not exist in the database), return an
 // ErrorInvalidAuthToken error and an empty User{} instance.
 func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (User, error) {
-	newUser := User{}
+	var userId uuid.UUID
 	err := db.pool.QueryRow(
 		ctx,
 		`
@@ -154,33 +154,19 @@ func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (Us
 			limit 1
 		`,
 		string(token),
-	).Scan(&newUser.Id)
+	).Scan(&userId)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
 			// auth token not in database
-			return newUser, ErrInvalidAuthToken
+			return User{}, ErrInvalidAuthToken
 		}
 
 		// other db error
-		return newUser, err
-	}
-
-	err = db.pool.QueryRow(
-		ctx,
-		`
-			select username, email
-			from auth.user
-			where id=$1
-		`,
-		newUser.Id,
-	).Scan(&newUser.Username, &newUser.Email)
-
-	if err != nil {
 		return User{}, err
 	}
 
-	return newUser, nil
+	return db.GetUserFromId(ctx, userId)
 }
 
 // Check if the specified username already exists in the database.
