@@ -33,6 +33,8 @@ const (
 )
 
 var (
+	// returned by Client.jsonGetHelper when there is no body in http response to JSON-decode
+	ErrNoBody                    = errors.New("empty body in http response")
 	ErrUserNotPlaying            = errors.New("user not playing anything")
 	ErrInvalidAuthFlowForRequest = errors.New("invalid client authentication flow for request")
 )
@@ -273,7 +275,7 @@ func (client *Client) jsonGetHelper(uri string, decodeTo any) (int, error) {
 
 	// no content in body to decode
 	if response.ContentLength <= 0 {
-		return response.StatusCode, nil
+		return response.StatusCode, ErrNoBody
 	}
 
 	// decode body to destination
@@ -594,7 +596,13 @@ func (spot *Client) GetCurrentlyPlayingInfo() (CurrentlyPlaying, error) {
 		CurrentlyPlayingType string `json:"currently_playing_type"`
 	}
 
-	if _, err := spot.jsonGetHelper("https://api.spotify.com/v1/me/player/currently-playing", &response); err != nil {
+	if statusCode, err := spot.jsonGetHelper("https://api.spotify.com/v1/me/player/currently-playing", &response); err != nil {
+		// no response -> user is not playing anything
+		if err == ErrNoBody && statusCode == http.StatusNoContent {
+			return CurrentlyPlaying{}, ErrUserNotPlaying
+		}
+
+		// different error
 		return CurrentlyPlaying{}, err
 	}
 
