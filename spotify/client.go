@@ -33,6 +33,7 @@ const (
 )
 
 var (
+	ErrUserNotPlaying            = errors.New("user not playing anything")
 	ErrInvalidAuthFlowForRequest = errors.New("invalid client authentication flow for request")
 )
 
@@ -95,7 +96,10 @@ func AuthorizationCodeFromParams(client_id, client_secret, access_token, refresh
 	}
 }
 
-func NewAuthorizationCode(client_id, client_secret, code string) (*Client, error) {
+// The "redirect_uri" parameter is necessary as, when exchanging the "code" url query parameter for an authentication
+// token, a redirect_uri in the body must also be supplied that has previously been used to obtain the "code" in the
+// first place. I guess this is used for security on Spotify's end for some reason.
+func NewAuthorizationCode(client_id, client_secret, code, redirect_uri string) (*Client, error) {
 	newClient := &Client{
 		flowType:         AuthorizationCode,
 		Client_id:        client_id,
@@ -106,7 +110,7 @@ func NewAuthorizationCode(client_id, client_secret, code string) (*Client, error
 	bodyData := url.Values{
 		"grant_type":   {"authorization_code"},
 		"code":         {code},
-		"redirect_uri": {"http://localhost:7070/api/account/spotify_connect_callback"},
+		"redirect_uri": {redirect_uri},
 	}.Encode()
 
 	req, err := http.NewRequest("POST", endpointToken, strings.NewReader(bodyData))
@@ -248,30 +252,36 @@ func (client *Client) Refresh() (bool, error) {
 
 // helper function that performs a GET request to the specified uri with an appended Authorization
 // header and decodes the body as JSON to the specified destination
-func (client *Client) jsonGetHelper(uri string, decodeTo any) error {
+func (client *Client) jsonGetHelper(uri string, decodeTo any) (int, error) {
 	req, err := http.NewRequest("GET", uri, nil)
+
+	// error constructing request
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	req.Header.Add("Authorization", "Bearer "+client.AccessToken)
 
 	response, err := http.DefaultClient.Do(req)
+
+	// error performing request
 	if err != nil {
-		return err
+		return -1, err
 	}
 
 	defer response.Body.Close()
 
-	if response.StatusCode != 200 {
-		return errors.New(response.Status)
+	// no content in body to decode
+	if response.ContentLength <= 0 {
+		return response.StatusCode, nil
 	}
 
+	// decode body to destination
 	if err := json.NewDecoder(response.Body).Decode(decodeTo); err != nil {
-		return err
+		return response.StatusCode, err
 	}
 
-	return nil
+	return response.StatusCode, nil
 }
 
 func (spot *Client) Search(query string, limit int) (Search, error) {
@@ -282,7 +292,7 @@ func (spot *Client) Search(query string, limit int) (Search, error) {
 	}.Encode()
 
 	var searchResults searchResponse
-	err := spot.jsonGetHelper(endpointSearch+"?"+searchQuery, &searchResults)
+	_, err := spot.jsonGetHelper(endpointSearch+"?"+searchQuery, &searchResults)
 
 	if err != nil {
 		return Search{}, err
@@ -306,7 +316,7 @@ func (spot *Client) Search(query string, limit int) (Search, error) {
 
 func (spot *Client) GetTrackById(id string) (*music.Track, error) {
 	var track track
-	if err := spot.jsonGetHelper(endpointTrack+id, &track); err != nil {
+	if _, err := spot.jsonGetHelper(endpointTrack+id, &track); err != nil {
 		return nil, err
 	}
 
@@ -320,7 +330,7 @@ func (spot *Client) GetSeveralTracksById(ids []string) ([]music.Track, error) {
 	var result struct {
 		Tracks []track `json:"tracks"`
 	}
-	err := spot.jsonGetHelper(requestUrl, &result)
+	_, err := spot.jsonGetHelper(requestUrl, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -347,7 +357,7 @@ func (spot *Client) GetTrackByMatch(iden string) (*music.Track, error) {
 
 func (spot *Client) GetArtistById(id string, discogFillLevel int, albumTypes []music.AlbumType) (*music.Artist, error) {
 	var artist artist
-	if err := spot.jsonGetHelper(endpointArtist+id, &artist); err != nil {
+	if _, err := spot.jsonGetHelper(endpointArtist+id, &artist); err != nil {
 		return nil, err
 	}
 
@@ -379,7 +389,7 @@ func (spot *Client) GetArtistByMatch(iden string, discogFillLevel int, albumType
 
 func (spot *Client) GetAlbumById(id string) (*music.Album, error) {
 	var album album
-	if err := spot.jsonGetHelper(endpointAlbum+id, &album); err != nil {
+	if _, err := spot.jsonGetHelper(endpointAlbum+id, &album); err != nil {
 		return nil, err
 	}
 
@@ -417,7 +427,7 @@ func (spot *Client) GetSeveralAlbumsById(ids []string) ([]music.Album, error) {
 	var result struct {
 		Albums []album `json:"albums"`
 	}
-	err := spot.jsonGetHelper(requestUrl, &result)
+	_, err := spot.jsonGetHelper(requestUrl, &result)
 	if err != nil {
 		return nil, err
 	}
@@ -465,7 +475,7 @@ func (spot *Client) GetArtistDiscography(artist *music.Artist, includeGroups []m
 		"include_groups": {music.IncludeGroupToString(includeGroups)},
 	}.Encode()
 
-	err := spot.jsonGetHelper(endpointArtist+artist.SpotifyId+"/albums?"+queryParams, &response)
+	_, err := spot.jsonGetHelper(endpointArtist+artist.SpotifyId+"/albums?"+queryParams, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -501,7 +511,7 @@ func (spot *Client) GetAlbumTracklist(album *music.Album) ([]music.Track, error)
 		"limit": {"50"},
 	}.Encode()
 
-	err := spot.jsonGetHelper(endpointAlbum+album.SpotifyId+"/tracks?"+queryParams, &response)
+	_, err := spot.jsonGetHelper(endpointAlbum+album.SpotifyId+"/tracks?"+queryParams, &response)
 	if err != nil {
 		return nil, err
 	}
@@ -539,7 +549,7 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 		} `json:"external_urls"`
 	}
 
-	if err := spot.jsonGetHelper("https://api.spotify.com/v1/me", &response); err != nil {
+	if _, err := spot.jsonGetHelper("https://api.spotify.com/v1/me", &response); err != nil {
 		return UserProfile{}, err
 	}
 
@@ -563,4 +573,39 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 	}
 
 	return newUserProfile, nil
+}
+
+func (spot *Client) GetCurrentlyPlayingInfo() (CurrentlyPlaying, error) {
+	if spot.flowType != AuthorizationCode {
+		return CurrentlyPlaying{}, ErrInvalidAuthFlowForRequest
+	}
+
+	var response struct {
+		IsPlaying  bool `json:"is_playing"`
+		ProgressMs int  `json:"progress_ms"`
+		Context    struct {
+			Type         string `json:"type"`
+			Href         string `json:"href"`
+			ExternalUrls struct {
+				Spotify string `json:"spotify"`
+			} `json:"external_urls"`
+		} `json:"context"`
+		Item                 track  `json:"item"`
+		CurrentlyPlayingType string `json:"currently_playing_type"`
+	}
+
+	if _, err := spot.jsonGetHelper("https://api.spotify.com/v1/me/player/currently-playing", &response); err != nil {
+		return CurrentlyPlaying{}, err
+	}
+
+	// playing podcast episode or ad
+	if response.CurrentlyPlayingType != "track" {
+		return CurrentlyPlaying{}, ErrUserNotPlaying
+	}
+
+	return CurrentlyPlaying{
+		IsPlayingNow: response.IsPlaying,
+		Track:        response.Item.toDB(),
+		Progress:     time.Duration(response.ProgressMs * int(time.Millisecond)),
+	}, nil
 }
