@@ -3,6 +3,7 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
+	"bool3max/musicdash/spotify"
 	"fmt"
 	"net/http"
 
@@ -10,7 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
+func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Engine {
 	var router = gin.Default()
 
 	api := router.Group("/api")
@@ -21,13 +22,22 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 			// Sign-up using classic e-mail address and password combination.
 			groupAccount.POST("/signup", HandlerSignupCred(database))
 
-			// Sign-up using an existing Spotify account.
-			groupAccount.POST("/signup_spotify", func(c *gin.Context) {
-				c.String(http.StatusNotImplemented, "not implemented")
-			})
-
 			// Log-in using e-mail address and password.
 			groupAccount.POST("/login", HandlerLoginCred(database))
+
+			// Obtain a Spotify authorization url that the user should be redirected to.
+			// An url query parameter "flow_type" is required to be one of "connect" or "continue_with".
+			groupAccount.GET(
+				"/spotify_auth_url",
+				HandlerSpotifyAuthUrl(database),
+			)
+
+			// Continuation of the "Continue with Spotify" flow. The client app sends a request to this endpoint
+			// alongside the "code" and "state" parameters forwarded from Spotify.
+			groupAccount.POST(
+				"/spotify_continue_with",
+				HandlerSpotifyContinueWith(database),
+			)
 
 			// from this point on all endpoints in the account group require valid auth
 			groupAccount.Use(AuthNeeded(database))
@@ -38,41 +48,40 @@ func NewRouter(database *db.Db, spotify music.ResourceProvider) *gin.Engine {
 			// log out everywhere (i.e. revoke all active auth tokens for account)
 			groupAccount.DELETE("/logout_everywhere", HandlerLogout(database, true))
 
-			// Initial endpoint in the process of connecting a Spotify account
-			// that returns a URI to Spotify's account auth. API
-			groupAccount.GET(
-				"/spotify_connect",
-				HandlerSpotifyConnectRedirect(database),
-			)
-
-			// Spotify's auth. api then redirects the user back to this endpoint
-			groupAccount.GET(
-				"/spotify_connect_callback",
-				HandlerSpotifyConnectCallback(database),
+			// Link a Spotify account with an existing musicdash account. This endpoint requires the
+			// "code" and "state" url query parameters to be forwarded from the spotify auth response.
+			groupAccount.POST(
+				"/spotify_link_account",
+				HandlerSpotifyLinkAccount(database),
 			)
 		}
 
 		groupSpotify := api.Group("/spotify")
 		groupSpotify.Use(AuthNeeded(database), SpotifyAuthNeeded(database))
 		{
-			groupSpotify.GET("/myProfile", func(c *gin.Context) {
+			groupSpotify.GET("/currentlyPlaying", func(c *gin.Context) {
 				currentAccount := GetUserFromCtx(c)
 				spot := currentAccount.Spotify
 
-				accountDetails, err := spot.GetCurrentUserProfile()
+				currentlyPlaying, err := spot.GetCurrentlyPlayingInfo()
 				if err != nil {
-					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+					if err == spotify.ErrUserNotPlaying {
+						c.JSON(http.StatusOK, gin.H{"error": "ERROR_USER_NOT_PLAYING"})
+						return
+					}
+
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "SPOTIFY"})
 					return
 				}
 
-				c.String(http.StatusOK, fmt.Sprintf("%+v", accountDetails))
+				c.JSON(http.StatusOK, currentlyPlaying)
 			})
 		}
 
 		api.GET("/res", AuthNeeded(database), func(ctx *gin.Context) {
 			user := GetUserFromCtx(ctx)
 
-			ctx.String(200, "you are logged in as: "+user.String())
+			ctx.String(200, fmt.Sprintf("You are logged in as: %+v\n", *user))
 		})
 	}
 

@@ -3,7 +3,6 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/spotify"
-	"fmt"
 	"log"
 	"math/rand"
 	"net/http"
@@ -12,6 +11,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -49,7 +49,7 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 
 		user, err := database.GetUserFromAuthToken(c, db.UserAuthToken(authToken))
 		if err != nil {
-			if err == db.ErrorInvalidAuthToken {
+			if err == db.ErrInvalidAuthToken {
 				c.AbortWithStatusJSON(http.StatusUnauthorized, responseInvalidLogin)
 				return
 			}
@@ -171,7 +171,7 @@ func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		if err = database.UserInsert(data.Username, data.Password, data.Email); err != nil {
+		if _, err = database.UserInsert(data.Username, data.Password, data.Email); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
@@ -195,9 +195,9 @@ func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		authToken, err := database.UserLogin(c, data.Password, data.Email)
+		authToken, err := database.UserLoginCred(c, data.Password, data.Email)
 		if err != nil {
-			if err == db.ErrorEmailNotRegistered || err == db.ErrorPasswordIncorrect {
+			if err == db.ErrEmailNotRegistered || err == db.ErrPasswordIncorrect {
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "Incorrect login credentials."})
 				return
 			}
@@ -250,8 +250,18 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 	}
 }
 
-func HandlerSpotifyConnectRedirect(database *db.Db) gin.HandlerFunc {
+// This API endpoint returns a new Spotify auth redirect URL that the user's frontend is redirected to
+// in order to perform authorization with spotify.
+func HandlerSpotifyAuthUrl(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// flow_type must be one of "connect" or "continue_with"
+
+		flowType := c.Query("flow_type")
+		if flowType == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "ERROR_MISSING_FLOW_TYPE"})
+			return
+		}
+
 		// generate random string for state parameter
 		var letters = []rune("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
@@ -260,11 +270,22 @@ func HandlerSpotifyConnectRedirect(database *db.Db) gin.HandlerFunc {
 			state[i] = letters[rand.Intn(len(letters))]
 		}
 
+		var spotifyRedirectUri = "http://localhost:7070/"
+		switch flowType {
+		case "connect":
+			spotifyRedirectUri += "#spotify_connect_account"
+		case "continue_with":
+			spotifyRedirectUri += "#spotify_continue_with"
+		default:
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "ERROR_INVALID_FLOW_TYPE"})
+			return
+		}
+
 		endpoint := "https://accounts.spotify.com/authorize"
 		params := url.Values{
 			"client_id":     {db.MUSICDASH_SPOTIFY_CLIENT_ID},
 			"response_type": {"code"},
-			"redirect_uri":  {"http://localhost:7070/api/account/spotify_connect_callback"},
+			"redirect_uri":  {spotifyRedirectUri},
 			"scope":         {"user-read-playback-position user-top-read user-read-recently-played user-library-read user-read-playback-state user-modify-playback-state user-read-currently-playing user-read-email user-read-private"},
 			"state":         {string(state)},
 		}
@@ -279,7 +300,11 @@ func HandlerSpotifyConnectRedirect(database *db.Db) gin.HandlerFunc {
 	}
 }
 
-func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
+// The frontend makes a request to this handler once the user successfully authorizes with spotify.
+// Spotify redirects the user back to the app and provides the "state" and "code" parameters which
+// are then forwarded to this api handler which then authorizes a new spotify client and links
+// it to the user's musicdash account.
+func HandlerSpotifyLinkAccount(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := GetUserFromCtx(c)
 
@@ -295,7 +320,7 @@ func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
 		}
 
 		if queryErr != "" {
-			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "Spotify response: " + queryErr})
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "spotify error: " + queryErr})
 			return
 		}
 
@@ -309,20 +334,16 @@ func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
 			db.MUSICDASH_SPOTIFY_CLIENT_ID,
 			db.MUSICDASH_SPOTIFY_SECRET,
 			queryCode,
+			"http://localhost:7070/#spotify_connect_account",
 		)
 
 		if err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
 			return
 		}
 
+		// successfully authenticated with spotify
 		user.Spotify = userSpotifyClient
-
-		// presreve the spotify auth params into the database
-		if err := user.SaveSpotifyAuthParams(c); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
-			return
-		}
 
 		spotifyProfile, err := user.Spotify.GetCurrentUserProfile()
 		if err != nil {
@@ -330,10 +351,154 @@ func HandlerSpotifyConnectCallback(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		if err = user.AssociateSpotifyProfile(c, spotifyProfile); err != nil {
-			fmt.Println(err)
+		if err = user.LinkSpotifyProfile(c, spotifyProfile); err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
+
+		// Preserve the spotify auth params into the database. If linking spotify acc fails
+		// we don't want to store auth credentials.
+		if err := user.SaveSpotifyAuthParams(c); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+	}
+}
+
+func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		queryState := c.Query("state")
+		queryCode := c.Query("code")
+		queryError := c.Query("error")
+
+		clientState, err := c.Cookie("spotify_connect_state")
+
+		if queryState == "" || queryCode == "" || err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		if queryError != "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "spotify error: " + queryError})
+			return
+		}
+
+		if queryState != clientState {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"message": "states don't match."})
+			return
+		}
+
+		// authenticate new spotify.Client using auth. code flow with the code response
+		userSpotifyClient, err := spotify.NewAuthorizationCode(
+			db.MUSICDASH_SPOTIFY_CLIENT_ID,
+			db.MUSICDASH_SPOTIFY_SECRET,
+			queryCode,
+			"http://localhost:7070/#spotify_continue_with",
+		)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
+			return
+		}
+
+		spotifyProfile, err := userSpotifyClient.GetCurrentUserProfile()
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"message": "error getting spotify user profile"})
+			return
+		}
+
+		var eventualAuthToken db.UserAuthToken
+
+		// check for an existing musicdash account with same linked spotify account that the user just authorized
+		var existingUserId uuid.UUID
+		err = database.Pool().QueryRow(
+			c,
+			`
+				select userid
+				from auth.user_spotify
+				where spotify_id=$1	
+			`,
+			spotifyProfile.SpotifyId,
+		).Scan(&existingUserId)
+
+		// error
+		if err != nil && err != pgx.ErrNoRows {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		// no existing musicdash acc. with same linked spotify acc.
+		if err == pgx.ErrNoRows {
+			newUsername := spotifyProfile.DisplayName
+
+			usernameExists, err := database.UsernameIsRegistered(c, newUsername)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+
+			emailExists, err := database.EmailIsRegistered(c, spotifyProfile.Email)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+
+			if emailExists {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "ERROR_SPOTIFY_EMAIL_REGISTERED"})
+				return
+			}
+
+			if usernameExists {
+				newUsername += "__musicdash_"
+			}
+
+			// create new musicdash account
+			newUserId, err := database.UserInsert(newUsername, "", spotifyProfile.Email)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+
+			// obtain db.User of newly registered user
+
+			newUser, err := database.GetUserFromId(c, newUserId)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+
+			newUser.Spotify = userSpotifyClient // save authenticated spotify client to user
+
+			// link new account to spotify account
+			if err = newUser.LinkSpotifyProfile(c, spotifyProfile); err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+
+			// save spotify auth parameters to database as the user is now logged in and has a connected spotify account
+			if err = newUser.SaveSpotifyAuthParams(c); err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+
+			// log user into newly created account
+			eventualAuthToken, err = database.UserNewAuthToken(c, newUserId)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+		} else {
+			// existing account found, simply log into it
+			eventualAuthToken, err = database.UserNewAuthToken(c, existingUserId)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				return
+			}
+		}
+
+		// save token as cookie on client
+		c.SetSameSite(http.SameSiteLaxMode)
+		c.SetCookie("auth_token", string(eventualAuthToken), int((time.Hour * 24 * 30).Seconds()), "/", "", true, true)
+		c.JSON(http.StatusOK, gin.H{"token": eventualAuthToken})
 	}
 }
