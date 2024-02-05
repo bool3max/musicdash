@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -24,10 +25,11 @@ var ErrInvalidAuthToken = errors.New("invalid auth token")
 var ErrSpotifyProfileNotLinked = errors.New("user has no linked spotify profile")
 
 type User struct {
-	Id       uuid.UUID
-	Username string
-	Email    string
-	Spotify  *spotify.Client
+	Id           uuid.UUID
+	RegisteredAt time.Time
+	Username     string
+	Email        string
+	Spotify      *spotify.Client
 }
 
 // Preserve the current parameters in user.Spotify to the database unconditionally.
@@ -211,6 +213,26 @@ func (db *Db) EmailIsRegistered(ctx context.Context, email string) (bool, error)
 	}
 }
 
+func (db *Db) GetUserFromId(ctx context.Context, userId uuid.UUID) (User, error) {
+	newUser := User{Id: userId}
+
+	err := db.pool.QueryRow(
+		ctx,
+		`
+			select username, email, registered_at
+			from auth.user
+			where id=$1
+		`,
+		userId,
+	).Scan(&newUser.Username, &newUser.Email, &newUser.RegisteredAt)
+
+	if err != nil {
+		return User{}, err
+	}
+
+	return newUser, nil
+}
+
 // Insert a new user into the database. Returns the user id of the new user.
 func (db *Db) UserInsert(username, password, email string) (uuid.UUID, error) {
 	// generate new uuid-v4 identifier for user
@@ -219,16 +241,25 @@ func (db *Db) UserInsert(username, password, email string) (uuid.UUID, error) {
 		return uuid.UUID{}, err
 	}
 
-	pwdAsBytes := []byte(password)
+	// the final password hash to be insert into database
+	var pwdHash []byte = nil
 
-	// The password to be hashed is salted by prepending to it the unique user id (uuidv4)
-	pwdToHash := make([]byte, 0, len(userUuid)+len(pwdAsBytes))
-	pwdToHash = append(pwdToHash, userUuid[:]...)
-	pwdToHash = append(pwdToHash, pwdAsBytes...)
+	// only generate password hash if plaintext password was provided
+	// otherwise, the user account is created without a password
+	// (this happens when "continue with spotify" is used and the account is considered simply
+	// a vessel for logging into with spotify)
+	if password != "" {
+		pwdAsBytes := []byte(password)
 
-	pwdHash, err := bcrypt.GenerateFromPassword(pwdToHash, bcrypt.DefaultCost)
-	if err != nil {
-		return uuid.UUID{}, err
+		// The password to be hashed is salted by prepending to it the unique user id (uuidv4)
+		pwdToHash := make([]byte, 0, len(userUuid)+len(pwdAsBytes))
+		pwdToHash = append(pwdToHash, userUuid[:]...)
+		pwdToHash = append(pwdToHash, pwdAsBytes...)
+
+		pwdHash, err = bcrypt.GenerateFromPassword(pwdToHash, bcrypt.DefaultCost)
+		if err != nil {
+			return uuid.UUID{}, err
+		}
 	}
 
 	sqlQueryInsertNewUser := `
