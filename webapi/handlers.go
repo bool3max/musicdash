@@ -27,10 +27,10 @@ type LoginCredRequestData struct {
 }
 
 var (
-	responseInternalServerError = gin.H{"message": "Server error."}
-	responseBadRequest          = gin.H{"message": "Bad request."}
-	responseNotLoggedIn         = gin.H{"message": "Not logged in."}
-	responseInvalidLogin        = gin.H{"message": "Invalid login."}
+	responseInternalServerError = gin.H{"error": "ERROR_INTERNAL_SERVER"}
+	responseBadRequest          = gin.H{"error": "ERROR_BAD_RQUEST"}
+	responseNotLoggedIn         = gin.H{"error": "ERROR_NOT_LOGGED_IN"}
+	responseInvalidLogin        = gin.H{"error": "ERROR_INVALID_LOGIN"}
 )
 
 // Returns a Gin handler middleware that ensures that the user is logged-in into a valid
