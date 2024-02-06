@@ -203,3 +203,12 @@ type UserProfile struct {
 	ProfileImages []music.MusicImage
 	Country       string
 }
+
+// info and metadata about the currently playing resource by an user
+type CurrentlyPlaying struct {
+	// The API returns info about currently playing resource even if it's PAUSED. This field indicates
+	// if the user is currently playing something LIVE, i.e. not paused.
+	IsPlayingNow bool
+	Progress     time.Duration
+	Track        music.Track
+}
