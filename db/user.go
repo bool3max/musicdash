@@ -23,6 +23,8 @@ var ErrEmailNotRegistered = errors.New("e-mail does not exist in database")
 var ErrPasswordIncorrect = errors.New("password incorrect")
 var ErrInvalidAuthToken = errors.New("invalid auth token")
 var ErrSpotifyProfileNotLinked = errors.New("user has no linked spotify profile")
+var ErrUserNotFound = errors.New("user not found")
+var ErrNoProfileImageSet = errors.New("user has no profile image set")
 
 type User struct {
 	Id           uuid.UUID
@@ -30,6 +32,37 @@ type User struct {
 	Username     string
 	Email        string
 	Spotify      *spotify.Client
+}
+
+type UserProfileImage struct {
+	Width, height int
+	Data          []byte
+	Size          int
+	UploadedAt    time.Time
+}
+
+// Set the user's profile image. All profile images must first be converted to webp format and sanitized.
+// This method performs no such checks, I do them in the http handler.
+// It sets the "size" column based on the length of the provided binary data of the image.
+func (user *User) SetProfileImage(ctx context.Context, width, height int, data []byte) error {
+	_, err := Acquire().pool.Exec(
+		ctx,
+		`
+			insert into auth.user_profile_img
+			(userid, width, height, data, size)
+			values
+			($1, $2, $3, $4, $5)
+			on conflict on constraint user_profile_img_pk do update
+			set width=$2, height=$3, data=$4, size=$5
+		`,
+		user.Id,
+		width,
+		height,
+		data,
+		len(data),
+	)
+
+	return err
 }
 
 // Preserve the current parameters in user.Spotify to the database unconditionally.
@@ -100,7 +133,7 @@ func (user *User) UnlinkSpotifyProfile(ctx context.Context) error {
 
 func (user *User) GetLinkedSpotifyProfile(ctx context.Context) (spotify.UserProfile, error) {
 	var profile spotify.UserProfile
-	profile.ProfileImages = make([]music.MusicImage, 1)
+	profile.ProfileImages = make([]music.Image, 1)
 
 	err := Acquire().pool.QueryRow(
 		ctx,
@@ -213,10 +246,37 @@ func (db *Db) GetUserFromId(ctx context.Context, userId uuid.UUID) (User, error)
 	).Scan(&newUser.Username, &newUser.Email, &newUser.RegisteredAt)
 
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return User{}, ErrUserNotFound
+		}
+
 		return User{}, err
 	}
 
 	return newUser, nil
+}
+
+func (db *Db) GetUserFromUsername(ctx context.Context, username string) (User, error) {
+	var userId uuid.UUID
+	err := db.pool.QueryRow(
+		ctx,
+		`
+			select id
+			from auth.user
+			where username=$1
+		`,
+		username,
+	).Scan(&userId)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return User{}, ErrUserNotFound
+		}
+
+		return User{}, err
+	}
+
+	return db.GetUserFromId(ctx, userId)
 }
 
 // Insert a new user into the database. Returns the user id of the new user.
@@ -372,4 +432,29 @@ func (db *Db) RevokeAuthToken(ctx context.Context, token UserAuthToken) error {
 	)
 
 	return err
+}
+
+// Get the current set profile image of the specified user. If the user has no profile image set,
+// an ErrNoProfileImageSet error is returned and a default profile image should be supplied.
+func (db *Db) GetUserProfileImage(ctx context.Context, userId uuid.UUID) (UserProfileImage, error) {
+	newProfileImg := UserProfileImage{}
+	err := db.pool.QueryRow(
+		ctx,
+		`
+			select width, height, size, data, uploaded_at
+			from auth.user_profile_img
+			where userid=$1
+		`,
+		userId,
+	).Scan(&newProfileImg.Width, &newProfileImg.height, &newProfileImg.Size, &newProfileImg.Data, &newProfileImg.UploadedAt)
+
+	if err != nil {
+		if err == pgx.ErrNoRows {
+			return UserProfileImage{}, ErrNoProfileImageSet
+		}
+
+		return UserProfileImage{}, err
+	}
+
+	return newProfileImg, nil
 }

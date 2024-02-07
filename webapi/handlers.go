@@ -3,15 +3,19 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/spotify"
+	"io"
 	"log"
 	"math/rand"
 	"net/http"
 	"net/mail"
 	"net/url"
+	"slices"
+	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/h2non/bimg"
 	"github.com/jackc/pgx/v5"
 )
 
@@ -500,5 +504,114 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 		c.SetSameSite(http.SameSiteLaxMode)
 		c.SetCookie("auth_token", string(eventualAuthToken), int((time.Hour * 24 * 30).Seconds()), "/", "", true, true)
 		c.JSON(http.StatusOK, gin.H{"token": eventualAuthToken})
+	}
+}
+
+func HandlerUploadProfileImage(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentUser := GetUserFromCtx(c)
+
+		// Content-Type is the first line of defense and should no tbe trusted, however
+		// we require the client to set it adequately to one of the following types
+		acceptedMimeTypes := []string{"image/png", "image/jpg", "image/jpeg", "image/webp"}
+
+		contentType := c.ContentType()
+
+		if !slices.Contains(acceptedMimeTypes, contentType) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		contentLengthHeader := c.GetHeader("Content-Length")
+		if contentLengthHeader == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		bodyLen, err := strconv.Atoi(contentLengthHeader)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		if bodyLen > (5 * 10e6) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		imageData, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		// create new *bimg.Image from raw request image data
+		image := bimg.NewImage(imageData)
+		metadata, err := image.Metadata()
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		var imageDataFinal []byte
+		if image.Type() == "webp" {
+			imageDataFinal = imageData
+		} else {
+			log.Println("image data provided not in web format, converting...")
+			imageDataFinal, err = image.Convert(bimg.WEBP)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+				return
+			}
+		}
+
+		err = currentUser.SetProfileImage(
+			c,
+			metadata.Size.Width,
+			metadata.Size.Height,
+			imageDataFinal,
+		)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Profile image updated successfully."})
+	}
+}
+
+// Return the profile picture of the requested user by userId.
+func HandlerGetUserProfileImage(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		userIdParam := c.Param("userid")
+		if userIdParam == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		userId, err := uuid.Parse(userIdParam)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		profileImage, err := database.GetUserProfileImage(
+			c,
+			userId,
+		)
+
+		if err != nil {
+			if err == db.ErrNoProfileImageSet {
+				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "ERROR_USER_NO_PROFILE_IMAGE"})
+				return
+			}
+
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		// images are always stored in webp format
+		c.Data(http.StatusOK, "image/webp", profileImage.Data)
 	}
 }

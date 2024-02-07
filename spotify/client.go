@@ -561,13 +561,13 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 		FollowerCount: uint(response.Followers.Total),
 		ProfileUri:    response.Uri,
 		ProfileUrl:    response.ExternalUrls.Spotify,
-		ProfileImages: make([]music.MusicImage, len(response.Images)),
+		ProfileImages: make([]music.Image, len(response.Images)),
 		Country:       response.Country,
 		Email:         response.Email,
 	}
 
 	for idx, img := range response.Images {
-		newUserProfile.ProfileImages[idx] = music.MusicImage{
+		newUserProfile.ProfileImages[idx] = music.Image{
 			Height: int(img.Height),
 			Width:  int(img.Width),
 			Url:    img.Url,
@@ -597,7 +597,7 @@ func (spot *Client) GetCurrentlyPlayingInfo() (CurrentlyPlaying, error) {
 	}
 
 	if statusCode, err := spot.jsonGetHelper("https://api.spotify.com/v1/me/player/currently-playing", &response); err != nil {
-		// no response -> user is not playing anything
+		// no response and 204 -> user is not playing anything
 		if err == ErrNoBody && statusCode == http.StatusNoContent {
 			return CurrentlyPlaying{}, ErrUserNotPlaying
 		}

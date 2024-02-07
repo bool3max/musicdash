@@ -3,9 +3,7 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
-	"bool3max/musicdash/spotify"
 	"fmt"
-	"net/http"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -54,35 +52,21 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 				"/spotify_link_account",
 				HandlerSpotifyLinkAccount(database),
 			)
+
+			groupAccount.POST(
+				"/upload_profile_image",
+				HandlerUploadProfileImage(database),
+			)
 		}
 
-		groupSpotify := api.Group("/spotify")
-		groupSpotify.Use(AuthNeeded(database), SpotifyAuthNeeded(database))
-		{
-			groupSpotify.GET("/currentlyPlaying", func(c *gin.Context) {
-				currentAccount := GetUserFromCtx(c)
-				spot := currentAccount.Spotify
-
-				currentlyPlaying, err := spot.GetCurrentlyPlayingInfo()
-				if err != nil {
-					if err == spotify.ErrUserNotPlaying {
-						c.JSON(http.StatusOK, gin.H{"error": "ERROR_USER_NOT_PLAYING"})
-						return
-					}
-
-					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "SPOTIFY"})
-					return
-				}
-
-				c.JSON(http.StatusOK, currentlyPlaying)
-			})
-		}
-
+		// groupSpotify := api.Group("/spotify")
 		api.GET("/res", AuthNeeded(database), func(ctx *gin.Context) {
 			user := GetUserFromCtx(ctx)
 
 			ctx.String(200, fmt.Sprintf("You are logged in as: %+v\n", *user))
 		})
+
+		api.GET("/user/:userid/profile-image", HandlerGetUserProfileImage(database))
 	}
 
 	router.Use(static.ServeRoot("/", "./webapp"))
