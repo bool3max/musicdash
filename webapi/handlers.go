@@ -199,13 +199,22 @@ func HandlerLoginCred(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		authToken, err := database.UserLoginCred(c, data.Password, data.Email)
-		if err != nil {
+		// validate login credentials and obtain userId of user
+		var userId uuid.UUID
+		if userId, err = database.UserValidateLoginCred(c, data.Password, data.Email); err != nil {
 			if err == db.ErrEmailNotRegistered || err == db.ErrPasswordIncorrect {
 				c.JSON(http.StatusUnauthorized, gin.H{"message": "Incorrect login credentials."})
 				return
 			}
 
+			c.JSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		// login credentials valid, obtain auth token of requested user
+		var authToken db.UserAuthToken
+		authToken, err = database.UserNewAuthToken(c, userId)
+		if err != nil {
 			c.JSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}

@@ -256,6 +256,7 @@ func (db *Db) GetUserFromId(ctx context.Context, userId uuid.UUID) (User, error)
 	return newUser, nil
 }
 
+// Get a user based on an unique username.
 func (db *Db) GetUserFromUsername(ctx context.Context, username string) (User, error) {
 	var userId uuid.UUID
 	err := db.pool.QueryRow(
@@ -330,20 +331,17 @@ func (db *Db) UserInsert(username, password, email string) (uuid.UUID, error) {
 	return userUuid, nil
 }
 
-// Attempt to login the user based on an email and password. If the credentials match,
-// that is, if an user account with the specified e-mail is registed and the password is correct,
-// an AuthToken is returned and error is nil. If the e-mail is not registered or if the password is incorrect,
-// an empty AuthToken is returned (empty string), and error is set accordingly.
-// After a successful login, the generated AuthToken is saved in the database and facilitates a valid
-// session for that particular user account. Valid AuthToken(s) in the database have no expiration date
-// and last indefinitely - that is until the user logs out.
-func (db *Db) UserLoginCred(ctx context.Context, passwordGuess, email string) (UserAuthToken, error) {
+// Attemp to validate login credentials for a user. If the provided email does not match any registered
+// user in the database, an ErrEmailNotRegistered error is returned. If the provided email is registered
+// but its associated password is guessed incorrectly, an ErrPasswordIncorrect error is returned.
+// Otherwise, if both the email exists and the psasword is correct, error is nil.
+func (db *Db) UserValidateLoginCred(ctx context.Context, passwordGuess, email string) (uuid.UUID, error) {
 	passwordGuessBytes := []byte(passwordGuess)
 
 	row := db.pool.QueryRow(
 		ctx,
 		`
-			select id, username, pwdhash
+			select id, pwdhash
 			from auth.user
 			where email=$1
 			limit 1
@@ -352,20 +350,18 @@ func (db *Db) UserLoginCred(ctx context.Context, passwordGuess, email string) (U
 	)
 
 	var userId uuid.UUID
-	var username string
 	pwdHashDb := make([]byte, 0)
 
 	err := row.Scan(
 		&userId,
-		&username,
 		&pwdHashDb,
 	)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
-			return "", ErrEmailNotRegistered
+			return uuid.UUID{}, ErrEmailNotRegistered
 		} else {
-			return "", err
+			return uuid.UUID{}, err
 		}
 	}
 
@@ -378,14 +374,16 @@ func (db *Db) UserLoginCred(ctx context.Context, passwordGuess, email string) (U
 	err = bcrypt.CompareHashAndPassword(pwdHashDb, passwordGuessSaltedBytes)
 	// passwords do not match
 	if err != nil {
-		return "", ErrPasswordIncorrect
+		return uuid.UUID{}, ErrPasswordIncorrect
 	}
 
-	return db.UserNewAuthToken(ctx, userId)
+	// login credentials correct
+	return userId, nil
+
 }
 
-// Unconditionally log-in an user. The function generates a new valid UserAuthToken, saves it in the
-// database, and returns it. The function doesn't check if the passed userId is valid, and attempts
+// Unconditionally issue an auth token for an user. The function generates a new valid UserAuthToken,
+// saves it in the // database, and returns it. The function doesn't check if the passed userId is valid, and attempts
 // to insert it into auth.auth_token, which will of course fail on an invalid user id due to the
 // foreign key constraint.
 func (db *Db) UserNewAuthToken(ctx context.Context, userId uuid.UUID) (UserAuthToken, error) {
