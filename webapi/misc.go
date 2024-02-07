@@ -4,6 +4,7 @@ import (
 	"bool3max/musicdash/db"
 	"encoding/base64"
 	"net/http"
+	"regexp"
 
 	"github.com/gin-gonic/gin"
 )
@@ -26,4 +27,8 @@ func GetUserFromCtx(c *gin.Context) *db.User {
 func AppendSpotifyBase64AuthCredentialsRequest(req *http.Request, client_id, client_secret string) {
 	authCodeBase64 := base64.StdEncoding.EncodeToString([]byte(client_id + ":" + client_secret))
 	req.Header.Add("Authorization", "Basic "+authCodeBase64)
+}
+
+func UsernameIsValid(username string) bool {
+	return regexp.MustCompile(`^([a-z]|[A-Z]|[0-9]|_){3,30}$`).MatchString(username)
 }

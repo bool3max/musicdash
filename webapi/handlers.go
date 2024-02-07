@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"slices"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -135,10 +136,14 @@ func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
-		if len(data.Username) < 3 || len(data.Username) > 30 {
+		// trim all leading and trailing whitespace from the username
+		data.Username = strings.TrimSpace(data.Username)
+
+		// check that the username is valid
+		if !UsernameIsValid(data.Username) {
 			c.JSON(
 				http.StatusBadRequest,
-				gin.H{"message": "Username length must be between 3 and 30 characters."},
+				gin.H{"message": "Invalid username."},
 			)
 			return
 		}
