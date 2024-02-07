@@ -60,7 +60,7 @@ type artist struct {
 }
 
 func (artist artist) toDB() music.Artist {
-	dbImages := make([]music.MusicImage, len(artist.Images))
+	dbImages := make([]music.Image, len(artist.Images))
 	for idx, img := range artist.Images {
 		dbImages[idx] = img.toDB(artist.Id)
 	}
@@ -92,7 +92,7 @@ type album struct {
 func (album album) toDB() music.Album {
 	dbArtists := make([]music.Artist, len(album.Artists))
 	dbTracks := make([]music.Track, len(album.Tracks.Items))
-	dbImages := make([]music.MusicImage, len(album.Images))
+	dbImages := make([]music.Image, len(album.Images))
 
 	for idx, spotifyArtist := range album.Artists {
 		dbArtists[idx] = spotifyArtist.toDB()
@@ -140,8 +140,8 @@ type image struct {
 	Url           string
 }
 
-func (image image) toDB(spotifyId string) music.MusicImage {
-	return music.MusicImage{
+func (image image) toDB(spotifyId string) music.Image {
+	return music.Image{
 		Width:     image.Width,
 		Height:    image.Height,
 		Url:       image.Url,
@@ -200,7 +200,7 @@ type UserProfile struct {
 	FollowerCount uint
 	ProfileUri    string
 	ProfileUrl    string
-	ProfileImages []music.MusicImage
+	ProfileImages []music.Image
 	Country       string
 }
 
