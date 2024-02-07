@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/mail"
 	"net/url"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -617,7 +618,15 @@ func HandlerGetUserProfileImage(database *db.Db) gin.HandlerFunc {
 
 		if err != nil {
 			if err == db.ErrNoProfileImageSet {
-				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": "ERROR_USER_NO_PROFILE_IMAGE"})
+				// user has no profile image set, serve default profile image from disk
+				// TODO: preload this image into memory instead of reading it every single time
+				image, err := os.ReadFile("./static/profile_image_default.webp")
+				if err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+					return
+				}
+
+				c.Data(http.StatusOK, "image/webp", image)
 				return
 			}
 
