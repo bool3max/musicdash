@@ -44,7 +44,7 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			groupAccount.DELETE("/logout", HandlerLogout(database, false))
 
 			// log out everywhere (i.e. revoke all active auth tokens for account)
-			groupAccount.DELETE("/logout_everywhere", HandlerLogout(database, true))
+			groupAccount.DELETE("/logout-all", HandlerLogout(database, true))
 
 			// Link a Spotify account with an existing musicdash account. This endpoint requires the
 			// "code" and "state" url query parameters to be forwarded from the spotify auth response.
