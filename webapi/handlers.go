@@ -366,11 +366,13 @@ func HandlerSpotifyLinkAccount(database *db.Db) gin.HandlerFunc {
 
 		spotifyProfile, err := user.Spotify.GetCurrentUserProfile()
 		if err != nil {
+			log.Println("error getting profile, ", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 
 		if err = user.LinkSpotifyProfile(c, spotifyProfile); err != nil {
+			log.Println("error linking profile: ", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
@@ -378,6 +380,7 @@ func HandlerSpotifyLinkAccount(database *db.Db) gin.HandlerFunc {
 		// Preserve the spotify auth params into the database. If linking spotify acc fails
 		// we don't want to store auth credentials.
 		if err := user.SaveSpotifyAuthParams(c); err != nil {
+			log.Println("error saving auth params: ", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
@@ -585,6 +588,37 @@ func HandlerUploadProfileImage(database *db.Db) gin.HandlerFunc {
 			metadata.Size.Width,
 			metadata.Size.Height,
 			imageDataFinal,
+		)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Profile image updated successfully."})
+	}
+}
+
+func HandlerUploadProfileImageFromSpotify(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		currentUser := GetUserFromCtx(c)
+		spotifyProfile, err := currentUser.GetLinkedSpotifyProfile(c)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		// spotify profile images stored in the database have only one image
+		if err = spotifyProfile.ProfileImages[0].Download(); err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		err = currentUser.SetProfileImage(
+			c,
+			spotifyProfile.ProfileImages[0].Width,
+			spotifyProfile.ProfileImages[0].Height,
+			spotifyProfile.ProfileImages[0].Data,
 		)
 
 		if err != nil {

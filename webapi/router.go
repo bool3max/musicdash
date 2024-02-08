@@ -26,7 +26,7 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			// Obtain a Spotify authorization url that the user should be redirected to.
 			// An url query parameter "flow_type" is required to be one of "connect" or "continue_with".
 			groupAccount.GET(
-				"/spotify_auth_url",
+				"/spotify-auth-url",
 				HandlerSpotifyAuthUrl(database),
 			)
 
@@ -54,8 +54,14 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			)
 
 			groupAccount.POST(
-				"/upload_profile_image",
+				"/upload-profile-image",
 				HandlerUploadProfileImage(database),
+			)
+
+			groupAccount.POST(
+				"/upload-profile-image/from-spotify",
+				SpotifyAuthNeeded(database),
+				HandlerUploadProfileImageFromSpotify(database),
 			)
 		}
 
