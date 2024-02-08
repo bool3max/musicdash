@@ -614,11 +614,23 @@ func HandlerUploadProfileImageFromSpotify(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
+		var finalImageData []byte = spotifyProfile.ProfileImages[0].Data
+
+		if spotifyProfile.ProfileImages[0].MimeType != "image/webp" {
+			// image not in webp, convert
+			img := bimg.NewImage(spotifyProfile.ProfileImages[0].Data)
+			finalImageData, err = img.Convert(bimg.WEBP)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+				return
+			}
+		}
+
 		err = currentUser.SetProfileImage(
 			c,
 			spotifyProfile.ProfileImages[0].Width,
 			spotifyProfile.ProfileImages[0].Height,
-			spotifyProfile.ProfileImages[0].Data,
+			finalImageData,
 		)
 
 		if err != nil {
