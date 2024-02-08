@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"net/url"
 	"strconv"
@@ -246,7 +247,6 @@ func (client *Client) Refresh() (bool, error) {
 		client.ExpiresAt = time.Now().Add(time.Duration(response.Expires_in) * time.Second)
 
 		return true, nil
-
 	} else {
 		return true, errors.New("unsuppored client flow type")
 	}
@@ -274,7 +274,7 @@ func (client *Client) jsonGetHelper(uri string, decodeTo any) (int, error) {
 	defer response.Body.Close()
 
 	// no content in body to decode
-	if response.ContentLength <= 0 {
+	if response.ContentLength != -1 && response.ContentLength <= 0 {
 		return response.StatusCode, ErrNoBody
 	}
 
@@ -551,7 +551,8 @@ func (spot *Client) GetCurrentUserProfile() (UserProfile, error) {
 		} `json:"external_urls"`
 	}
 
-	if _, err := spot.jsonGetHelper("https://api.spotify.com/v1/me", &response); err != nil {
+	if statusCode, err := spot.jsonGetHelper("https://api.spotify.com/v1/me", &response); err != nil {
+		log.Println("error getting profile, status: ", statusCode)
 		return UserProfile{}, err
 	}
 
