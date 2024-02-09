@@ -22,6 +22,8 @@ ALTER TABLE ONLY spotify.track_album DROP CONSTRAINT track_album_fk_1;
 ALTER TABLE ONLY spotify.track_album DROP CONSTRAINT track_album_fk;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_fk1;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_fk;
+ALTER TABLE ONLY auth.user_spotify DROP CONSTRAINT user_spotify_user_fk;
+ALTER TABLE ONLY auth.user_profile_img DROP CONSTRAINT user_profile_img_user_fk;
 ALTER TABLE ONLY auth.spotify_token DROP CONSTRAINT spotify_user_fk;
 ALTER TABLE ONLY auth.auth_token DROP CONSTRAINT login_session_token_user_fk;
 ALTER TABLE ONLY spotify.track DROP CONSTRAINT track_pk;
@@ -34,10 +36,14 @@ ALTER TABLE ONLY spotify.album DROP CONSTRAINT album_pk;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_un;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_pk;
 ALTER TABLE ONLY auth."user" DROP CONSTRAINT user_username_key;
+ALTER TABLE ONLY auth.user_spotify DROP CONSTRAINT user_spotify_unique_1;
+ALTER TABLE ONLY auth.user_spotify DROP CONSTRAINT user_spotify_unique;
+ALTER TABLE ONLY auth.user_spotify DROP CONSTRAINT user_spotify_pk;
 ALTER TABLE ONLY auth."user" DROP CONSTRAINT user_pwdhash_key;
+ALTER TABLE ONLY auth.user_profile_img DROP CONSTRAINT user_profile_img_pk;
 ALTER TABLE ONLY auth."user" DROP CONSTRAINT user_pkey;
 ALTER TABLE ONLY auth."user" DROP CONSTRAINT user_email_key;
-ALTER TABLE ONLY auth.spotify_token DROP CONSTRAINT spotify_unique;
+ALTER TABLE ONLY auth.spotify_token DROP CONSTRAINT spotify_token_pk;
 ALTER TABLE ONLY auth.auth_token DROP CONSTRAINT auth_token_un;
 DROP TABLE spotify.track_artist;
 DROP TABLE spotify.track_album;
@@ -46,6 +52,8 @@ DROP TABLE spotify.images;
 DROP TABLE spotify.artist;
 DROP TABLE spotify.album_artist;
 DROP TABLE spotify.album;
+DROP TABLE auth.user_spotify;
+DROP TABLE auth.user_profile_img;
 DROP TABLE auth."user";
 DROP TABLE auth.spotify_token;
 DROP TABLE auth.auth_token;
@@ -163,9 +171,9 @@ ALTER TABLE auth.auth_token OWNER TO postgres;
 
 CREATE TABLE auth.spotify_token (
     userid uuid NOT NULL,
-    authtoken character varying NOT NULL,
+    accesstoken character varying NOT NULL,
     refreshtoken character varying NOT NULL,
-    expiresat timestamp without time zone NOT NULL
+    expiresat timestamp with time zone NOT NULL
 );
 
 
@@ -180,11 +188,48 @@ CREATE TABLE auth."user" (
     username character varying(30) NOT NULL,
     registered_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     email public.citext NOT NULL,
-    pwdhash bytea NOT NULL
+    pwdhash bytea
 );
 
 
 ALTER TABLE auth."user" OWNER TO postgres;
+
+--
+-- Name: user_profile_img; Type: TABLE; Schema: auth; Owner: postgres
+--
+
+CREATE TABLE auth.user_profile_img (
+    userid uuid NOT NULL,
+    width integer NOT NULL,
+    height integer NOT NULL,
+    data bytea NOT NULL,
+    uploaded_at timestamp with time zone DEFAULT CURRENT_TIMESTAMP,
+    size integer NOT NULL
+);
+
+
+ALTER TABLE auth.user_profile_img OWNER TO postgres;
+
+--
+-- Name: user_spotify; Type: TABLE; Schema: auth; Owner: postgres
+--
+
+CREATE TABLE auth.user_spotify (
+    userid uuid NOT NULL,
+    spotify_displayname character varying NOT NULL,
+    spotify_followers integer,
+    spotify_uri character varying NOT NULL,
+    profile_image_url character varying NOT NULL,
+    profile_image_width integer NOT NULL,
+    profile_image_height integer NOT NULL,
+    country character varying,
+    spotify_email character varying NOT NULL,
+    spotify_url character varying NOT NULL,
+    spotify_id character varying NOT NULL
+);
+
+
+ALTER TABLE auth.user_spotify OWNER TO postgres;
 
 --
 -- Name: album; Type: TABLE; Schema: spotify; Owner: postgres
@@ -303,11 +348,11 @@ ALTER TABLE ONLY auth.auth_token
 
 
 --
--- Name: spotify_token spotify_unique; Type: CONSTRAINT; Schema: auth; Owner: postgres
+-- Name: spotify_token spotify_token_pk; Type: CONSTRAINT; Schema: auth; Owner: postgres
 --
 
 ALTER TABLE ONLY auth.spotify_token
-    ADD CONSTRAINT spotify_unique UNIQUE (userid);
+    ADD CONSTRAINT spotify_token_pk PRIMARY KEY (userid);
 
 
 --
@@ -327,11 +372,43 @@ ALTER TABLE ONLY auth."user"
 
 
 --
+-- Name: user_profile_img user_profile_img_pk; Type: CONSTRAINT; Schema: auth; Owner: postgres
+--
+
+ALTER TABLE ONLY auth.user_profile_img
+    ADD CONSTRAINT user_profile_img_pk PRIMARY KEY (userid);
+
+
+--
 -- Name: user user_pwdhash_key; Type: CONSTRAINT; Schema: auth; Owner: postgres
 --
 
 ALTER TABLE ONLY auth."user"
     ADD CONSTRAINT user_pwdhash_key UNIQUE (pwdhash);
+
+
+--
+-- Name: user_spotify user_spotify_pk; Type: CONSTRAINT; Schema: auth; Owner: postgres
+--
+
+ALTER TABLE ONLY auth.user_spotify
+    ADD CONSTRAINT user_spotify_pk PRIMARY KEY (userid, spotify_id);
+
+
+--
+-- Name: user_spotify user_spotify_unique; Type: CONSTRAINT; Schema: auth; Owner: postgres
+--
+
+ALTER TABLE ONLY auth.user_spotify
+    ADD CONSTRAINT user_spotify_unique UNIQUE (userid);
+
+
+--
+-- Name: user_spotify user_spotify_unique_1; Type: CONSTRAINT; Schema: auth; Owner: postgres
+--
+
+ALTER TABLE ONLY auth.user_spotify
+    ADD CONSTRAINT user_spotify_unique_1 UNIQUE (spotify_id);
 
 
 --
@@ -431,6 +508,22 @@ ALTER TABLE ONLY auth.spotify_token
 
 
 --
+-- Name: user_profile_img user_profile_img_user_fk; Type: FK CONSTRAINT; Schema: auth; Owner: postgres
+--
+
+ALTER TABLE ONLY auth.user_profile_img
+    ADD CONSTRAINT user_profile_img_user_fk FOREIGN KEY (userid) REFERENCES auth."user"(id);
+
+
+--
+-- Name: user_spotify user_spotify_user_fk; Type: FK CONSTRAINT; Schema: auth; Owner: postgres
+--
+
+ALTER TABLE ONLY auth.user_spotify
+    ADD CONSTRAINT user_spotify_user_fk FOREIGN KEY (userid) REFERENCES auth."user"(id);
+
+
+--
 -- Name: album_artist album_artist_fk; Type: FK CONSTRAINT; Schema: spotify; Owner: postgres
 --
 
@@ -480,3 +573,5 @@ ALTER TABLE ONLY spotify.track_artist
 
 --
 -- PostgreSQL database dump complete
+--
+
