@@ -122,7 +122,7 @@ func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 		user.Spotify = userSpotifyClient
 		// save potentially-refreshed parameters of client to database
 		if err = user.SaveSpotifyAuthParams(c); err != nil {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
 	}
@@ -455,13 +455,13 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 
 			usernameExists, err := database.UsernameIsRegistered(c, newUsername)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 
 			emailExists, err := database.EmailIsRegistered(c, spotifyProfile.Email)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 
@@ -477,7 +477,7 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 			// create new musicdash account
 			newUserId, err := database.UserInsert(newUsername, "", spotifyProfile.Email)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 
@@ -485,7 +485,7 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 
 			newUser, err := database.GetUserFromId(c, newUserId)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 
@@ -493,27 +493,27 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 
 			// link new account to spotify account
 			if err = newUser.LinkSpotifyProfile(c, spotifyProfile); err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 
 			// save spotify auth parameters to database as the user is now logged in and has a connected spotify account
 			if err = newUser.SaveSpotifyAuthParams(c); err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 
 			// log user into newly created account
 			eventualAuthToken, err = database.UserNewAuthToken(c, newUserId)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 		} else {
 			// existing account found, simply log into it
 			eventualAuthToken, err = database.UserNewAuthToken(c, existingUserId)
 			if err != nil {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SERVER_INTERNAL"})
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
 			}
 		}
