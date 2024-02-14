@@ -638,7 +638,7 @@ func (spot *Client) GetRecentlyPlayedTracks() ([]music.Play, error) {
 		return nil, err
 	}
 
-	convertedPlays := make([]music.Play, response.Total)
+	convertedPlays := make([]music.Play, len(response.Items))
 	for idx, play := range response.Items {
 		convertedPlays[idx] = music.Play{
 			At:    play.PlayedAt,
