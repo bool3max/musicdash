@@ -22,9 +22,9 @@ const (
 )
 
 func IncludeGroupToString(group []AlbumType) string {
-	as_strings := make([]string, 0, len(group))
-	for _, g := range group {
-		as_strings = append(as_strings, string(g))
+	as_strings := make([]string, len(group))
+	for idx, g := range group {
+		as_strings[idx] = string(g)
 	}
 
 	return strings.Join(as_strings, ",")
