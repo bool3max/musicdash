@@ -131,6 +131,11 @@ type Track struct {
 	SpotifyPopularity int
 }
 
+type Play struct {
+	At    time.Time
+	Track Track
+}
+
 // Preserve the track into the local database. Preserving a track performs
 // the following database operations:
 //  1. stores the base info of the track into public.spotify_track

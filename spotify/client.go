@@ -618,3 +618,33 @@ func (spot *Client) GetCurrentlyPlayingInfo() (CurrentlyPlaying, error) {
 		Progress:     time.Duration(response.ProgressMs * int(time.Millisecond)),
 	}, nil
 }
+
+func (spot *Client) GetRecentlyPlayedTracks() ([]music.Play, error) {
+	if spot.flowType != AuthorizationCode {
+		return nil, ErrInvalidAuthFlowForRequest
+	}
+
+	var response struct {
+		Total int    `json:"total"`
+		Next  string `json:"next"`
+		Items []struct {
+			Track    track     `json:"track"`
+			PlayedAt time.Time `json:"played_at"`
+		} `json:"items"`
+	}
+
+	if _, err := spot.jsonGetHelper("https://api.spotify.com/v1/me/player/recently-played", &response); err != nil {
+		// no response and 204 -> user is not playing anything
+		return nil, err
+	}
+
+	convertedPlays := make([]music.Play, response.Total)
+	for idx, play := range response.Items {
+		convertedPlays[idx] = music.Play{
+			At:    play.PlayedAt,
+			Track: play.Track.toDB(),
+		}
+	}
+
+	return convertedPlays, nil
+}
