@@ -212,3 +212,8 @@ type CurrentlyPlaying struct {
 	Progress     time.Duration
 	Track        music.Track
 }
+
+type Play struct {
+	At    time.Time
+	Track music.Track
+}

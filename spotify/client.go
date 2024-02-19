@@ -619,7 +619,7 @@ func (spot *Client) GetCurrentlyPlayingInfo() (CurrentlyPlaying, error) {
 	}, nil
 }
 
-func (spot *Client) GetRecentlyPlayedTracks() ([]music.Play, error) {
+func (spot *Client) GetRecentlyPlayedTracks() ([]Play, error) {
 	if spot.flowType != AuthorizationCode {
 		return nil, ErrInvalidAuthFlowForRequest
 	}
@@ -638,9 +638,9 @@ func (spot *Client) GetRecentlyPlayedTracks() ([]music.Play, error) {
 		return nil, err
 	}
 
-	convertedPlays := make([]music.Play, len(response.Items))
+	convertedPlays := make([]Play, len(response.Items))
 	for idx, play := range response.Items {
-		convertedPlays[idx] = music.Play{
+		convertedPlays[idx] = Play{
 			At:    play.PlayedAt,
 			Track: play.Track.toDB(),
 		}
