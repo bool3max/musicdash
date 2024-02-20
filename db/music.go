@@ -19,19 +19,22 @@ func (db *Db) GetTrackById(trackId string) (*music.Track, error) {
 	track := new(music.Track)
 	track.SpotifyId = trackId
 
+	// id of belonging album
+	var albumId string
+
+	// track duration in milliseconds from database
+	var trackDuration uint
+
 	// query the base info about the track from the database
 	row := db.pool.QueryRow(
 		context.TODO(),
 		`
-			select title, duration, tracklistnum, discnum, popularity, spotifyuri, explicit, isrc
+			select title, duration, tracklistnum, discnum, popularity, spotifyuri, explicit, isrc, spotifyidalbum
 			from spotify.track		
 			where spotifyid=$1
 		`,
 		trackId,
 	)
-
-	// track duration in milliseconds from database
-	var trackDuration uint
 
 	err := row.Scan(
 		&track.Title,
@@ -42,6 +45,7 @@ func (db *Db) GetTrackById(trackId string) (*music.Track, error) {
 		&track.SpotifyURI,
 		&track.IsExplicit,
 		&track.Isrc,
+		&albumId,
 	)
 
 	if err != nil {
@@ -53,23 +57,6 @@ func (db *Db) GetTrackById(trackId string) (*music.Track, error) {
 
 	// convert millisecond uint duration to time.Duration
 	track.Duration = time.Duration(trackDuration * 1e6)
-
-	var albumId string
-	row = db.pool.QueryRow(
-		context.TODO(),
-		`
-			select spotifyidalbum
-			from spotify.track_album
-			where spotifyidtrack=$1
-			limit 1
-		`,
-		trackId,
-	)
-
-	err = row.Scan(&albumId)
-	if err != nil {
-		return nil, err
-	}
 
 	belongingAlbum, err := db.GetAlbumById(albumId)
 	if err != nil {
@@ -300,8 +287,8 @@ func (db *Db) GetAlbumTracklist(album *music.Album) ([]music.Track, error) {
 
 	// IDs of all tracks on the album
 	sqlQueryTracks := `
-		select spotifyidtrack
-		from spotify.track_album
+		select spotifyid
+		from spotify.track
 		where spotifyidalbum=$1
 		limit $2
 	`

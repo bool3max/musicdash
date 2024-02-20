@@ -137,15 +137,13 @@ type Track struct {
 //  2. stores the performing artists into public.spotify_track_artist
 //     , properly marking the main performing artist, and preserving
 //     any performing artists that aren't already in the database
-//  3. stores the belonging albums into public.spotify_track_album,
-//     preserving any belonging albums that aren't preserved
 func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
 	sqlQueryBaseInfo := `
 		insert into spotify.track
-		(spotifyid, title, duration, tracklistnum, discnum, explicit, popularity, spotifyuri, isrc, ean, upc)	
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+		(spotifyid, title, duration, tracklistnum, discnum, explicit, popularity, spotifyuri, isrc, ean, upc, spotifyidalbum)	
+		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		on conflict on constraint track_pk do update
-		set title = $2, duration = $3, tracklistnum = $4, discnum = $5, explicit = $6, popularity = $7, spotifyuri = $8, isrc = $9, ean = $10, upc = $11
+		set title = $2, duration = $3, tracklistnum = $4, discnum = $5, explicit = $6, popularity = $7, spotifyuri = $8, isrc = $9, ean = $10, upc = $11, spotifyidalbum=$12
 	`
 
 	_, err := pool.Exec(
@@ -162,6 +160,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		track.Isrc,
 		track.Ean,
 		track.Upc,
+		track.Album.SpotifyId,
 	)
 
 	if err != nil {
@@ -206,19 +205,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		}
 	}
 
-	sqlQueryBelongingAlbum := `
-		insert into spotify.track_album
-		(spotifyidtrack, spotifyidalbum)
-		values ($1, $2)
-		on conflict on constraint track_album_pk do nothing
-	`
-
-	// if the track's owning album is set, preserve the relationship
-	// in the database
-	// sometimes the track's .Album won't be set (empty struct)
-	// for example when the track comes from an Album.Tracks[], in that case
-	// the album is known in advanace and does not need to be stored in each
-	// individual track
+	// preserve the track's belonging album if it isn't already so
 	if track.Album.SpotifyId != "" {
 		albumIsPreserved, err := track.Album.IsPreserved(ctx, pool)
 		if err != nil {
@@ -229,17 +216,6 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 			if err = track.Album.Preserve(ctx, pool, recurse); err != nil {
 				return err
 			}
-		}
-
-		_, err = pool.Exec(
-			ctx,
-			sqlQueryBelongingAlbum,
-			track.SpotifyId,
-			track.Album.SpotifyId,
-		)
-
-		if err != nil {
-			return err
 		}
 	}
 
@@ -446,28 +422,6 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 			if err = albumTrack.Preserve(ctx, pool, recurse); err != nil {
 				return err
 			}
-
-			// create a relation in public.spotify_track_album
-			// for the newly inserted track
-
-			sqlQueryTrackAlbumRelation := `
-				insert into spotify.track_album
-				(spotifyidtrack, spotifyidalbum)
-				values ($1, $2)
-				on conflict on constraint track_album_pk do nothing
-			`
-
-			_, err = pool.Exec(
-				ctx,
-				sqlQueryTrackAlbumRelation,
-				albumTrack.SpotifyId,
-				album.SpotifyId,
-			)
-
-			if err != nil {
-				return err
-			}
-
 		}
 	}
 
