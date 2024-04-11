@@ -29,8 +29,8 @@ type AuthFlowType int
 
 // only these two are supported so far
 const (
-	ClientCredentials = iota
-	AuthorizationCode = iota
+	ClientCredentials AuthFlowType = iota
+	AuthorizationCode
 )
 
 var (
