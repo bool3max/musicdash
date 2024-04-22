@@ -51,15 +51,17 @@ func (user *User) SetProfileImage(ctx context.Context, width, height int, data [
 			insert into auth.user_profile_img
 			(userid, width, height, data, size)
 			values
-			($1, $2, $3, $4, $5)
+			(@userId, @width, @height, @data, @size)
 			on conflict on constraint user_profile_img_pk do update
-			set width=$2, height=$3, data=$4, size=$5
+			set width=@width, height=@height, data=@data, size=@size
 		`,
-		user.Id,
-		width,
-		height,
-		data,
-		len(data),
+		pgx.NamedArgs{
+			"userId": user.Id,
+			"width":  width,
+			"height": height,
+			"data":   data,
+			"size":   len(data),
+		},
 	)
 
 	return err
@@ -76,14 +78,15 @@ func (user *User) SaveSpotifyAuthParams(ctx context.Context) error {
 		`
 			insert into auth.spotify_token
 			(userid, accesstoken, refreshtoken, expiresat)
-			values ($1, $2, $3, $4)
+			values (@userId, @accessToken, @refreshToken, @expiresAt)
 			on conflict on constraint spotify_token_pk do update
-			set accesstoken=$2, refreshtoken=$3, expiresat=$4
+			set accesstoken=@accessToken, refreshtoken=@refreshToken, expiresat=@expiresAt
 		`,
-		user.Id,
-		user.Spotify.AccessToken,
-		user.Spotify.RefreshToken,
-		user.Spotify.ExpiresAt,
+		pgx.NamedArgs{
+			"accessToken":  user.Spotify.AccessToken,
+			"refreshToken": user.Spotify.RefreshToken,
+			"expiresAt":    user.Spotify.ExpiresAt,
+		},
 	)
 
 	return err
@@ -98,21 +101,23 @@ func (user *User) LinkSpotifyProfile(ctx context.Context, spotifyProfile spotify
 		`
 			insert into auth.user_spotify
 			(userid, spotify_displayname, spotify_followers, spotify_uri, profile_image_url, profile_image_width, profile_image_height, country, spotify_email, spotify_url, spotify_id)
-			values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			values (@userId, @spotifyDisplayName, @spotifyFollowers, @spotifyUri, @profileImageUrl, @profileImageWidth, @profileImageHeight, @country, @spotifyEmail, @spotifyUrl, @spotifyId)
 			on conflict on constraint user_spotify_pk do update
-			set spotify_displayname=$2, spotify_followers=$3, spotify_uri=$4, profile_image_url=$5, profile_image_width=$6, profile_image_height=$7, country=$8, spotify_email=$9, spotify_url=$10, spotify_id=$11
+			set spotify_displayname=@spotifyDisplayName spotify_followers=@spotifyFollowers, spotify_uri=@spotifyUri, profile_image_url=@profileImageUrl, profile_image_width=@profileImageWidth, profile_image_height=@profileImageHeight, country=@country, spotify_email=@spotifyEmail, spotify_url=@spotifyUrl, spotify_id=@spotifyId
 		`,
-		user.Id,
-		spotifyProfile.DisplayName,
-		spotifyProfile.FollowerCount,
-		spotifyProfile.ProfileUri,
-		spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Url,
-		spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Width,
-		spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Height,
-		spotifyProfile.Country,
-		spotifyProfile.Email,
-		spotifyProfile.ProfileUrl,
-		spotifyProfile.SpotifyId,
+		pgx.NamedArgs{
+			"userId":             user.Id,
+			"spotifyDisplayName": spotifyProfile.DisplayName,
+			"spotifyFollowers":   spotifyProfile.FollowerCount,
+			"spotifyUri":         spotifyProfile.ProfileUri,
+			"profileImageUrl":    spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Url,
+			"profileImageHeight": spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Height,
+			"profileImageWidth":  spotifyProfile.ProfileImages[len(spotifyProfile.ProfileImages)-1].Width,
+			"country":            spotifyProfile.Country,
+			"spotifyEmail":       spotifyProfile.Email,
+			"spotifyUrl":         spotifyProfile.ProfileUrl,
+			"spotifyId":          spotifyProfile.SpotifyId,
+		},
 	)
 
 	return err
@@ -312,16 +317,18 @@ func (db *Db) UserInsert(username, password, email string) (uuid.UUID, error) {
 	sqlQueryInsertNewUser := `
 		insert into auth.user
 		(id, username, pwdhash, email)	
-		values ($1, $2, $3, $4)
+		values (@id, @username, @pwdHash, @email)
 	`
 
 	_, err = db.pool.Exec(
 		context.TODO(),
 		sqlQueryInsertNewUser,
-		userUuid,
-		username,
-		pwdHash,
-		email,
+		pgx.NamedArgs{
+			"id":       userUuid,
+			"username": username,
+			"pwdHash":  pwdHash,
+			"email":    email,
+		},
 	)
 
 	if err != nil {
@@ -405,10 +412,12 @@ func (db *Db) UserNewAuthToken(ctx context.Context, userId uuid.UUID) (UserAuthT
 		`
 			insert into auth.auth_token
 			(userid, token)
-			values ($1, $2)
+			values (@userId, @authToken)
 		`,
-		userId,
-		authTokenB64,
+		pgx.NamedArgs{
+			"userId":    userId,
+			"authToken": authTokenB64,
+		},
 	)
 
 	if err != nil {
