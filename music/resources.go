@@ -98,18 +98,20 @@ func (img *Image) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool
 		insert into spotify.images
 		(spotifyid, url, width, height, data, mimetype)	
 		values
-		($1, $2, $3, $4, $5, $6)
+		(@spotifyId, @url, @width, @height, @data, @mimeType)
 	`
 
 	_, err := pool.Exec(
 		ctx,
 		sqlQueryImg,
-		img.SpotifyId,
-		img.Url,
-		img.Width,
-		img.Height,
-		img.Data,
-		img.MimeType,
+		pgx.NamedArgs{
+			"spotifyId": img.SpotifyId,
+			"url":       img.Url,
+			"width":     img.Width,
+			"height":    img.Height,
+			"data":      img.Data,
+			"mimeType":  img.MimeType,
+		},
 	)
 
 	return err
@@ -141,26 +143,28 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 	sqlQueryBaseInfo := `
 		insert into spotify.track
 		(spotifyid, title, duration, tracklistnum, discnum, explicit, popularity, spotifyuri, isrc, ean, upc, spotifyidalbum)	
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+		values (@spotifyId, @title, @duration, @tracklistNum, @discNum, @explicit, @popularity, @spotifyUri, @isrc, @ean, @upc, @spotifyIdAlbum)
 		on conflict on constraint track_pk do update
-		set title = $2, duration = $3, tracklistnum = $4, discnum = $5, explicit = $6, popularity = $7, spotifyuri = $8, isrc = $9, ean = $10, upc = $11, spotifyidalbum=$12
+		set title = @title, duration = @duration, tracklistnum = @tracklistNum, discnum = @discNum, explicit = @explicit, popularity = @popularity, spotifyuri = @spotifyUri, isrc = @isrc, ean = @ean, upc = @upc, spotifyidalbum=@spotifyIdAlbum
 	`
 
 	_, err := pool.Exec(
 		ctx,
 		sqlQueryBaseInfo,
-		track.SpotifyId,
-		track.Title,
-		track.Duration.Milliseconds(),
-		track.TracklistNum,
-		track.DiscNum,
-		track.IsExplicit,
-		track.SpotifyPopularity,
-		track.SpotifyURI,
-		track.Isrc,
-		track.Ean,
-		track.Upc,
-		track.Album.SpotifyId,
+		pgx.NamedArgs{
+			"spotifyId":      track.SpotifyId,
+			"title":          track.Title,
+			"duration":       track.Duration.Milliseconds(),
+			"tracklistNum":   track.TracklistNum,
+			"discNum":        track.DiscNum,
+			"explicit":       track.IsExplicit,
+			"popularity":     track.SpotifyPopularity,
+			"spotifyUri":     track.SpotifyURI,
+			"isrc":           track.Isrc,
+			"ean":            track.Ean,
+			"upc":            track.Upc,
+			"spotifyIdAlbum": track.Album.SpotifyId,
+		},
 	)
 
 	if err != nil {
@@ -171,7 +175,7 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 	sqlQueryPerformingArtist := `
 		insert into spotify.track_artist
 		(spotifyidtrack, spotifyidartist, ismain)	
-		values ($1, $2, $3)
+		values (@spotifyIdTrack, @spotifyIdArtist, @isMain)
 		on conflict on constraint track_artist_pk do nothing
 	`
 	for performingArtistIdx, performingArtist := range track.Artists {
@@ -195,9 +199,11 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		_, err = pool.Exec(
 			ctx,
 			sqlQueryPerformingArtist,
-			track.SpotifyId,
-			performingArtist.SpotifyId,
-			isMain,
+			pgx.NamedArgs{
+				"spotifyIdTrack":  track.SpotifyId,
+				"spotifyIdArtist": performingArtist.SpotifyId,
+				"isMain":          isMain,
+			},
 		)
 
 		if err != nil {
@@ -288,7 +294,7 @@ func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse 
 	sqlQuery := `
 		insert into spotify.artist
 		(spotifyid, name, spotifyuri, followers) 
-		values ($1, $2, $3, $4)
+		values (@spotifyId, @name, @spotifyUri, @followers)
 		on conflict on constraint artist_pk do update
 		set name = $2, spotifyuri = $3, followers = $4
 	`
@@ -297,10 +303,12 @@ func (artist *Artist) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse 
 	_, err := pool.Exec(
 		ctx,
 		sqlQuery,
-		artist.SpotifyId,
-		artist.Name,
-		artist.SpotifyURI,
-		artist.SpotifyFollowerCount,
+		pgx.NamedArgs{
+			"spotifyId":  artist.SpotifyId,
+			"name":       artist.Name,
+			"spotifyUri": artist.SpotifyURI,
+			"followers":  artist.SpotifyFollowerCount,
+		},
 	)
 
 	if err != nil {
@@ -348,23 +356,25 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 	sqlQueryBaseInfo := `
 		insert into spotify.album
 		(spotifyid, title, counttracks, releasedate, type, spotifyuri, isrc, ean, upc)
-		values ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+		values (@spotifyId, @title, @countTracks, @releaseDate, @type, @spotifyUri, @isrc, @ean, @upc)
 		on conflict on constraint album_pk do update
-		set title = $2, counttracks = $3, releasedate = $4, type = $5, spotifyuri = $6, isrc = $7, ean = $8, upc = $9
+		set title = @title, counttracks = @countTracks, releasedate = @releaseDate, type = @type, spotifyuri = @spotifyUri, isrc = @isrc, ean = @ean, upc = @upc 
 	`
 
 	_, err := pool.Exec(
 		ctx,
 		sqlQueryBaseInfo,
-		album.SpotifyId,
-		album.Title,
-		album.CountTracks,
-		album.ReleaseDate,
-		album.Type,
-		album.SpotifyURI,
-		album.Isrc,
-		album.Ean,
-		album.Upc,
+		pgx.NamedArgs{
+			"spotifyId":   album.SpotifyId,
+			"title":       album.Title,
+			"countTracks": album.CountTracks,
+			"releaseDate": album.ReleaseDate,
+			"type":        album.Type,
+			"spotifyUri":  album.SpotifyURI,
+			"isrc":        album.Isrc,
+			"ean":         album.Ean,
+			"upc":         album.Upc,
+		},
 	)
 
 	if err != nil {
@@ -374,7 +384,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 	sqlQueryPerformingArtist := `
 		insert into spotify.album_artist
 		(spotifyidartist, spotifyidalbum, ismain)
-		values ($1, $2, $3)
+		values (@spotifyIdArtist, @spotifyIdAlbum, @isMain)
 		on conflict on constraint album_artist_pk do nothing
 	`
 
@@ -396,9 +406,11 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 		_, err = pool.Exec(
 			ctx,
 			sqlQueryPerformingArtist,
-			performingArtist.SpotifyId,
-			album.SpotifyId,
-			isMain,
+			pgx.NamedArgs{
+				"spotifyIdArtist": performingArtist.SpotifyId,
+				"spotifyIdAlbum":  album.SpotifyId,
+				"isMain":          isMain,
+			},
 		)
 
 		if err != nil {
