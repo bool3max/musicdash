@@ -2,8 +2,8 @@
 -- PostgreSQL database dump
 --
 
--- Dumped from database version 16.1
--- Dumped by pg_dump version 16.1
+-- Dumped from database version 16.2
+-- Dumped by pg_dump version 16.2
 
 SET statement_timeout = 0;
 SET lock_timeout = 0;
@@ -18,8 +18,7 @@ SET row_security = off;
 
 ALTER TABLE ONLY spotify.track_artist DROP CONSTRAINT track_artist_fk_1;
 ALTER TABLE ONLY spotify.track_artist DROP CONSTRAINT track_artist_fk;
-ALTER TABLE ONLY spotify.track_album DROP CONSTRAINT track_album_fk_1;
-ALTER TABLE ONLY spotify.track_album DROP CONSTRAINT track_album_fk;
+ALTER TABLE ONLY spotify.track DROP CONSTRAINT track_album_fk;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_fk1;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_fk;
 ALTER TABLE ONLY auth.user_spotify DROP CONSTRAINT user_spotify_user_fk;
@@ -29,7 +28,6 @@ ALTER TABLE ONLY auth.auth_token DROP CONSTRAINT login_session_token_user_fk;
 ALTER TABLE ONLY spotify.track DROP CONSTRAINT track_pk;
 ALTER TABLE ONLY spotify.track_artist DROP CONSTRAINT track_artist_un;
 ALTER TABLE ONLY spotify.track_artist DROP CONSTRAINT track_artist_pk;
-ALTER TABLE ONLY spotify.track_album DROP CONSTRAINT track_album_pk;
 ALTER TABLE ONLY spotify.images DROP CONSTRAINT images_pk;
 ALTER TABLE ONLY spotify.artist DROP CONSTRAINT artist_pk;
 ALTER TABLE ONLY spotify.album DROP CONSTRAINT album_pk;
@@ -46,7 +44,6 @@ ALTER TABLE ONLY auth."user" DROP CONSTRAINT user_email_key;
 ALTER TABLE ONLY auth.spotify_token DROP CONSTRAINT spotify_token_pk;
 ALTER TABLE ONLY auth.auth_token DROP CONSTRAINT auth_token_un;
 DROP TABLE spotify.track_artist;
-DROP TABLE spotify.track_album;
 DROP TABLE spotify.track;
 DROP TABLE spotify.images;
 DROP TABLE spotify.artist;
@@ -308,23 +305,12 @@ CREATE TABLE spotify.track (
     isrc character varying,
     ean character varying,
     upc character varying,
-    discnum integer DEFAULT 1 NOT NULL
+    discnum integer DEFAULT 1 NOT NULL,
+    spotifyidalbum character varying
 );
 
 
 ALTER TABLE spotify.track OWNER TO postgres;
-
---
--- Name: track_album; Type: TABLE; Schema: spotify; Owner: postgres
---
-
-CREATE TABLE spotify.track_album (
-    spotifyidtrack character(22) NOT NULL,
-    spotifyidalbum character(22) NOT NULL
-);
-
-
-ALTER TABLE spotify.track_album OWNER TO postgres;
 
 --
 -- Name: track_artist; Type: TABLE; Schema: spotify; Owner: postgres
@@ -460,14 +446,6 @@ ALTER TABLE ONLY spotify.images
 
 
 --
--- Name: track_album track_album_pk; Type: CONSTRAINT; Schema: spotify; Owner: postgres
---
-
-ALTER TABLE ONLY spotify.track_album
-    ADD CONSTRAINT track_album_pk PRIMARY KEY (spotifyidalbum, spotifyidtrack);
-
-
---
 -- Name: track_artist track_artist_pk; Type: CONSTRAINT; Schema: spotify; Owner: postgres
 --
 
@@ -540,19 +518,11 @@ ALTER TABLE ONLY spotify.album_artist
 
 
 --
--- Name: track_album track_album_fk; Type: FK CONSTRAINT; Schema: spotify; Owner: postgres
+-- Name: track track_album_fk; Type: FK CONSTRAINT; Schema: spotify; Owner: postgres
 --
 
-ALTER TABLE ONLY spotify.track_album
-    ADD CONSTRAINT track_album_fk FOREIGN KEY (spotifyidtrack) REFERENCES spotify.track(spotifyid);
-
-
---
--- Name: track_album track_album_fk_1; Type: FK CONSTRAINT; Schema: spotify; Owner: postgres
---
-
-ALTER TABLE ONLY spotify.track_album
-    ADD CONSTRAINT track_album_fk_1 FOREIGN KEY (spotifyidalbum) REFERENCES spotify.album(spotifyid);
+ALTER TABLE ONLY spotify.track
+    ADD CONSTRAINT track_album_fk FOREIGN KEY (spotifyidalbum) REFERENCES spotify.album(spotifyid);
 
 
 --
