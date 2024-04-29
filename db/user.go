@@ -209,9 +209,7 @@ func (db *Db) GetUserFromAuthToken(ctx context.Context, token UserAuthToken) (Us
 
 // Check if the specified username already exists in the database.
 func (db *Db) UsernameIsRegistered(ctx context.Context, username string) (bool, error) {
-	row := db.pool.QueryRow(ctx, "select username from auth.user where username=$1 limit 1", username)
-
-	err := row.Scan(nil)
+	err := db.pool.QueryRow(ctx, "select username from auth.user where username=$1 limit 1", username).Scan(nil)
 
 	switch err {
 	case pgx.ErrNoRows:
