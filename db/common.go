@@ -2,7 +2,7 @@ package db
 
 import (
 	"context"
-	"log"
+	"fmt"
 	"os"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -30,7 +30,7 @@ func Acquire() *Db {
 	if dbInstance == nil {
 		pool, err := pgxpool.New(context.TODO(), MUSICDASH_DATABASE_URL)
 		if err != nil {
-			log.Println("error acquiring database pgxpool connection: ", err)
+			fmt.Fprintln(os.Stderr, "error acquiring database pgxpool connection: ", err)
 			os.Exit(1)
 		}
 
