@@ -17,6 +17,8 @@ import (
 // sure that the request was properly authenticated, and if not, aborts the request.
 func GetUserFromCtx(c *gin.Context) *db.User {
 	userFromCtx, exists := c.Get("current_user")
+
+	// shouldn't ever happen under normal circumstances
 	if !exists {
 		return nil
 	}
@@ -29,6 +31,7 @@ func AppendSpotifyBase64AuthCredentialsRequest(req *http.Request, client_id, cli
 	req.Header.Add("Authorization", "Basic "+authCodeBase64)
 }
 
+// ASCII-only, letters + digits + underscores, in length range [3,30]
 func UsernameIsValid(username string) bool {
 	return regexp.MustCompile(`^([a-z]|[A-Z]|[0-9]|_){3,30}$`).MatchString(username)
 }
