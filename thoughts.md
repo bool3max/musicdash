@@ -9,3 +9,16 @@
     including a time.Now(), which is returned in the local timezone, but the time package can safely
     compare Time values of different timezones
   - for now I opted to use the first approach, i.e. store timestamps with the timezone in postgres
+
+- "Continue with Spotify" login flow explained:
+  1. User is logged out, opens app, clicks "Continue with Spotify" button
+  2. Frontend app makes request to /api/account/spotify-auth-url?flow_type=continue_with
+    1. The "flow_type" query parameter in this request is required to be one of "continue_with" or "connect" - and depending on its value the redirect
+    URL back from Spotify changes.
+    2. A random "state" string is generated, saved as a Cookie on the client, and also appended as an URL query parameter to the Spotify redirect auth. URL
+  3. The server responds with a Spotify auth. URL to which the user is then redirected to in the browser. The user authenticates with Spotify, and if everything is correct, is redirected from it back to the musicdash website, with a "#spotify_connect_with" hash present at the end of the URL. Three URL query parameters are present: state, code, and potentially error. The "state" parameter is the same one server generated in step 2. The "code" parameter is used for further authentication.
+  4. The frontend app makes a new POST request to /api/account/spotify_continue_with, forwarding to it the 3 query parameters from the previous step. Once the server receives this request, it first valides the state in the query paramater (i.e. the one from Spotify) against the one saved as a cookie on the client. This is a security measure against tampering. 
+  5. The server follows the next steps of the "Authorization Code" auth. flow: it uses the "code" parameter from Spotify alongside the app's Client ID and Client Secret to obtain an Authentication Token (and refresh token, etc...) that can then be used to interact with the API.
+  6. The server polls the Spotify API ant obtains details about the current Spotify user's profile. It then checks if there's an existing musicdash account linked with the Spotify profile. If there is, the user is logged into it. If there isn't, a new boilerplate musicdash account is created using the info from the current Spotify profile, and the two accounts are linked. The user is then logged into the brand new musicdash account.
+  
+  That's the gist of how the 1-click "Continue with Spotify" flow works. The procedure for linking a Spotify profile with a an existing musicdash account is very similar so I won't document it. Basically in step 2. "flow_type" is set to "connect" with leads to the frontend hash after the redirect being "spotify_connect" after which the client makes a request to /api/account/spotify_link_account, forwarding the parameters from the priorspotify request, just like in the Continue With flow. All in all pretty simple.
