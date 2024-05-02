@@ -78,7 +78,7 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 // db.SpotifyAuthParams to the existing db.User value in the current context.
 func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user := GetUserFromCtx(c)
+		user := c.MustGet("current_user").(*db.User)
 
 		var accessToken, refreshToken string
 		var expiresAt time.Time
@@ -237,7 +237,7 @@ func HandlerLogout(database *db.Db, everywhere bool) gin.HandlerFunc {
 
 		if everywhere {
 			// log out everywhere
-			user := GetUserFromCtx(c)
+			user := c.MustGet("current_user").(*db.User)
 			err := user.RevokeAllTokens(c)
 
 			if err != nil {
@@ -325,7 +325,7 @@ func HandlerSpotifyAuthUrl(database *db.Db) gin.HandlerFunc {
 // it to the user's musicdash account.
 func HandlerSpotifyLinkAccount(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		user := GetUserFromCtx(c)
+		user := c.MustGet("current_user").(*db.User)
 
 		queryState := c.Query("state")
 		queryCode := c.Query("code")
@@ -527,7 +527,7 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 
 func HandlerUploadProfileImage(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		currentUser := GetUserFromCtx(c)
+		currentUser := c.MustGet("current_user").(*db.User)
 
 		// Content-Type is the first line of defense and should no tbe trusted, however
 		// we require the client to set it adequately to one of the following types
@@ -601,7 +601,7 @@ func HandlerUploadProfileImage(database *db.Db) gin.HandlerFunc {
 
 func HandlerUploadProfileImageFromSpotify(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		currentUser := GetUserFromCtx(c)
+		currentUser := c.MustGet("current_user").(*db.User)
 		spotifyProfile, err := currentUser.GetLinkedSpotifyProfile(c)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
