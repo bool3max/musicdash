@@ -83,6 +83,7 @@ func (user *User) SaveSpotifyAuthParams(ctx context.Context) error {
 			set accesstoken=@accessToken, refreshtoken=@refreshToken, expiresat=@expiresAt
 		`,
 		pgx.NamedArgs{
+			"userId":       user.Id,
 			"accessToken":  user.Spotify.AccessToken,
 			"refreshToken": user.Spotify.RefreshToken,
 			"expiresAt":    user.Spotify.ExpiresAt,
@@ -103,7 +104,7 @@ func (user *User) LinkSpotifyProfile(ctx context.Context, spotifyProfile spotify
 			(userid, spotify_displayname, spotify_followers, spotify_uri, profile_image_url, profile_image_width, profile_image_height, country, spotify_email, spotify_url, spotify_id)
 			values (@userId, @spotifyDisplayName, @spotifyFollowers, @spotifyUri, @profileImageUrl, @profileImageWidth, @profileImageHeight, @country, @spotifyEmail, @spotifyUrl, @spotifyId)
 			on conflict on constraint user_spotify_pk do update
-			set spotify_displayname=@spotifyDisplayName spotify_followers=@spotifyFollowers, spotify_uri=@spotifyUri, profile_image_url=@profileImageUrl, profile_image_width=@profileImageWidth, profile_image_height=@profileImageHeight, country=@country, spotify_email=@spotifyEmail, spotify_url=@spotifyUrl, spotify_id=@spotifyId
+			set spotify_displayname=@spotifyDisplayName, spotify_followers=@spotifyFollowers, spotify_uri=@spotifyUri, profile_image_url=@profileImageUrl, profile_image_width=@profileImageWidth, profile_image_height=@profileImageHeight, country=@country, spotify_email=@spotifyEmail, spotify_url=@spotifyUrl, spotify_id=@spotifyId
 		`,
 		pgx.NamedArgs{
 			"userId":             user.Id,
