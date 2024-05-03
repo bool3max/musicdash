@@ -3,7 +3,6 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
-	"fmt"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -33,7 +32,7 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			// Continuation of the "Continue with Spotify" flow. The client app sends a request to this endpoint
 			// alongside the "code" and "state" parameters forwarded from Spotify.
 			groupAccount.POST(
-				"/spotify_continue_with",
+				"/spotify-continue-with",
 				HandlerSpotifyContinueWith(database),
 			)
 
@@ -49,7 +48,7 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			// Link a Spotify account with an existing musicdash account. This endpoint requires the
 			// "code" and "state" url query parameters to be forwarded from the spotify auth response.
 			groupAccount.POST(
-				"/spotify_link_account",
+				"/spotify-link-account",
 				HandlerSpotifyLinkAccount(database),
 			)
 
@@ -66,11 +65,6 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 		}
 
 		// groupSpotify := api.Group("/spotify")
-		api.GET("/res", AuthNeeded(database), func(ctx *gin.Context) {
-			user := GetUserFromCtx(ctx)
-
-			ctx.String(200, fmt.Sprintf("You are logged in as: %+v\n", *user))
-		})
 
 		api.GET("/user/:userid/profile-image", HandlerGetUserProfileImage(database))
 	}
