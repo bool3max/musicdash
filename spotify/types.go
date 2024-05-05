@@ -149,13 +149,13 @@ func (image image) toDB(spotifyId string) music.Image {
 	}
 }
 
-// albums, tracks, and artist returned via Search() usually contain
+// albums, tracks, and artist returned via SearchResults() usually contain
 // less information that proper counterparts returned via
 // .Get<Resource>By<IdentityType>
-// Search() should be used when a non-specific resource is being looked for,
+// SearchResults() should be used when a non-specific resource is being looked for,
 // or when an ID of a specific resoure is required in order to obtain its
 // complete version
-type Search struct {
+type SearchResults struct {
 	Albums  []music.Album
 	Tracks  []music.Track
 	Artists []music.Artist
