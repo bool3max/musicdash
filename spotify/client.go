@@ -286,7 +286,7 @@ func (client *Client) jsonGetHelper(uri string, decodeTo any) (int, error) {
 	return response.StatusCode, nil
 }
 
-func (spot *Client) Search(query string, limit int) (Search, error) {
+func (spot *Client) Search(query string, limit int) (SearchResults, error) {
 	searchQuery := url.Values{
 		"q":     {url.QueryEscape(query)},
 		"limit": {strconv.Itoa(limit)},
@@ -297,10 +297,10 @@ func (spot *Client) Search(query string, limit int) (Search, error) {
 	_, err := spot.jsonGetHelper(endpointSearch+"?"+searchQuery, &searchResults)
 
 	if err != nil {
-		return Search{}, err
+		return SearchResults{}, err
 	}
 
-	var search Search
+	var search SearchResults
 	for _, track := range searchResults.Tracks.Items {
 		search.Tracks = append(search.Tracks, track.toDB())
 	}
