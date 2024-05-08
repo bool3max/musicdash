@@ -8,6 +8,7 @@ import (
 	"encoding/base64"
 	"errors"
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/google/uuid"
@@ -67,8 +68,58 @@ func (user *User) SetProfileImage(ctx context.Context, width, height int, data [
 	return err
 }
 
+// Establish a user.Spotify client using authentication parameters from the database
+func (user *User) GetSpotifyAuth(ctx context.Context) error {
+	var accessToken, refreshToken string
+	var expiresAt time.Time
+
+	err := Acquire().pool.QueryRow(
+		ctx,
+		`
+				select accesstoken, refreshtoken, expiresat
+				from auth.spotify_token
+				where userid=$1
+			`,
+		user.Id,
+	).Scan(&accessToken, &refreshToken, &expiresAt)
+
+	if err != nil {
+		// No spotify auth. params. in db for current user -> profile not linked
+		if err == pgx.ErrNoRows {
+			return ErrSpotifyProfileNotLinked
+		}
+
+		return err
+	}
+
+	userSpotifyClient := spotify.AuthorizationCodeFromParams(
+		MUSICDASH_SPOTIFY_CLIENT_ID,
+		MUSICDASH_SPOTIFY_SECRET,
+		accessToken,
+		refreshToken,
+		expiresAt,
+	)
+
+	// Refresh access token
+	if _, err = userSpotifyClient.Refresh(); err != nil {
+		log.Printf("error refreshing Spotify token for user {%s}: %v\n", user.Id.String(), err)
+		return err
+	}
+
+	user.Spotify = userSpotifyClient
+
+	// save potentially-refreshed new spotify auth. params. to database
+
+	if err = user.SaveSpotifyAuthDB(ctx); err != nil {
+		log.Println("Error preserving Spotify AuthParams to database: ", err)
+		return err
+	}
+
+	return nil
+}
+
 // Preserve the current parameters in user.Spotify to the database unconditionally.
-func (user *User) SaveSpotifyAuthParams(ctx context.Context) error {
+func (user *User) SaveSpotifyAuthDB(ctx context.Context) error {
 	if user.Spotify == nil {
 		return nil
 	}
@@ -463,4 +514,34 @@ func (db *Db) GetUserProfileImage(ctx context.Context, userId uuid.UUID) (UserPr
 	}
 
 	return newProfileImg, nil
+}
+
+// Unconditionally save all plays in the "plays" slice to the database and
+// associate them with the given user.
+func (user *User) SavePlays(plays []spotify.Play) error {
+	db := Acquire()
+
+	for _, play := range plays {
+
+		_, err := db.pool.Exec(
+			context.Background(),
+			`
+				insert into public.plays
+				(userid, at, spotifyid)
+				values (@userId, @at, @spotifyId)
+			`,
+			pgx.NamedArgs{
+				"userId":    user.Id,
+				"at":        play.At,
+				"spotifyId": play.Track.SpotifyId,
+			},
+		)
+
+		if err != nil {
+			log.Printf("SavePlays: error saving play {%s}@{%v} for {%v}: %v\n", play.Track.SpotifyId, play.At, user.Id.String(), err)
+			return err
+		}
+	}
+
+	return nil
 }

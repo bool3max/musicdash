@@ -75,53 +75,20 @@ func AuthNeeded(database *db.Db) gin.HandlerFunc {
 // must be preceeded by the AuthNeeded middleware. If the user has a connected Spotify account
 // but it is currently not authenticated (i.e. the access token is expired), the middleware
 // attempts to refresh it. Upon successfull validation, the middleware attaches an instance of
-// db.SpotifyAuthParams to the existing db.User value in the current context.
+// *spotify.Client to the existing db.User value in the current context.
 func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := c.MustGet("current_user").(*db.User)
 
-		var accessToken, refreshToken string
-		var expiresAt time.Time
-
-		err := database.Pool().QueryRow(
-			c,
-			`
-				select accesstoken, refreshtoken, expiresat
-				from auth.spotify_token
-				where userid=$1
-			`,
-			user.Id,
-		).Scan(&accessToken, &refreshToken, &expiresAt)
-
+		err := user.GetSpotifyAuth(c)
 		if err != nil {
-			if err == pgx.ErrNoRows {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "ERROR_SPOTIFY_UNAUTHENTICATED"})
-			} else {
-				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			// User has no Spotify authentication
+			if err == db.ErrSpotifyProfileNotLinked {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"ERROR": "ERROR_SPOTIFY_NOT_LINKED"})
+				return
 			}
 
-			return
-		}
-
-		userSpotifyClient := spotify.AuthorizationCodeFromParams(
-			db.MUSICDASH_SPOTIFY_CLIENT_ID,
-			db.MUSICDASH_SPOTIFY_SECRET,
-			accessToken,
-			refreshToken,
-			expiresAt,
-		)
-
-		// refresh access token
-		if _, err = userSpotifyClient.Refresh(); err != nil {
-			log.Println(err)
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "ERROR_SPOTIFY_AUTHORIZATION"})
-			return
-		}
-
-		// save spotify client instance to db.User instance for future handlers to make use of
-		user.Spotify = userSpotifyClient
-		// save potentially-refreshed parameters of client to database
-		if err = user.SaveSpotifyAuthParams(c); err != nil {
+			// other db error?
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
 		}
@@ -379,7 +346,7 @@ func HandlerSpotifyLinkAccount(database *db.Db) gin.HandlerFunc {
 
 		// Preserve the spotify auth params into the database. If linking spotify acc fails
 		// we don't want to store auth credentials.
-		if err := user.SaveSpotifyAuthParams(c); err != nil {
+		if err := user.SaveSpotifyAuthDB(c); err != nil {
 			log.Println("error saving auth params: ", err)
 			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 			return
@@ -506,7 +473,7 @@ func HandlerSpotifyContinueWith(database *db.Db) gin.HandlerFunc {
 			}
 
 			// save spotify auth parameters to database as the user is now logged in and has a connected spotify account
-			if err = newUser.SaveSpotifyAuthParams(c); err != nil {
+			if err = newUser.SaveSpotifyAuthDB(c); err != nil {
 				log.Println(err)
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
 				return
