@@ -619,9 +619,18 @@ func (spot *Client) GetCurrentlyPlayingInfo() (CurrentlyPlaying, error) {
 	}, nil
 }
 
-func (spot *Client) GetRecentlyPlayedTracks() ([]Play, error) {
+// If limit==0, use max (50).
+func (spot *Client) GetRecentlyPlayedTracks(limit int) ([]Play, error) {
 	if spot.flowType != AuthorizationCode {
 		return nil, ErrInvalidAuthFlowForRequest
+	}
+
+	if limit > 50 {
+		return nil, errors.New("invalid limit")
+	}
+
+	if limit == 0 {
+		limit = 50
 	}
 
 	var response struct {
@@ -633,7 +642,11 @@ func (spot *Client) GetRecentlyPlayedTracks() ([]Play, error) {
 		} `json:"items"`
 	}
 
-	if _, err := spot.jsonGetHelper("https://api.spotify.com/v1/me/player/recently-played", &response); err != nil {
+	finalUrl := "https://api.spotify.com/v1/me/player/recently-played" + "?" + url.Values{
+		"limit": {strconv.Itoa(limit)},
+	}.Encode()
+
+	if _, err := spot.jsonGetHelper(finalUrl, &response); err != nil {
 		// no response and 204 -> user is not playing anything
 		return nil, err
 	}
