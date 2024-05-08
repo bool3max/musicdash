@@ -21,6 +21,7 @@ ALTER TABLE ONLY spotify.track_artist DROP CONSTRAINT track_artist_fk;
 ALTER TABLE ONLY spotify.track DROP CONSTRAINT track_album_fk;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_fk1;
 ALTER TABLE ONLY spotify.album_artist DROP CONSTRAINT album_artist_fk;
+ALTER TABLE ONLY public.plays DROP CONSTRAINT plays_user_fk;
 ALTER TABLE ONLY auth.user_spotify DROP CONSTRAINT user_spotify_user_fk;
 ALTER TABLE ONLY auth.user_profile_img DROP CONSTRAINT user_profile_img_user_fk;
 ALTER TABLE ONLY auth.spotify_token DROP CONSTRAINT spotify_user_fk;
@@ -49,6 +50,7 @@ DROP TABLE spotify.images;
 DROP TABLE spotify.artist;
 DROP TABLE spotify.album_artist;
 DROP TABLE spotify.album;
+DROP TABLE public.plays;
 DROP TABLE auth.user_spotify;
 DROP TABLE auth.user_profile_img;
 DROP TABLE auth."user";
@@ -59,6 +61,7 @@ DROP EXTENSION pgcrypto;
 DROP EXTENSION fuzzystrmatch;
 DROP EXTENSION citext;
 DROP SCHEMA spotify;
+-- *not* dropping schema, since initdb creates it
 DROP SCHEMA auth;
 --
 -- Name: auth; Type: SCHEMA; Schema: -; Owner: postgres
@@ -68,6 +71,22 @@ CREATE SCHEMA auth;
 
 
 ALTER SCHEMA auth OWNER TO postgres;
+
+--
+-- Name: public; Type: SCHEMA; Schema: -; Owner: postgres
+--
+
+-- *not* creating schema, since initdb creates it
+
+
+ALTER SCHEMA public OWNER TO postgres;
+
+--
+-- Name: SCHEMA public; Type: COMMENT; Schema: -; Owner: postgres
+--
+
+COMMENT ON SCHEMA public IS '';
+
 
 --
 -- Name: spotify; Type: SCHEMA; Schema: -; Owner: postgres
@@ -185,7 +204,8 @@ CREATE TABLE auth."user" (
     username character varying(30) NOT NULL,
     registered_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     email public.citext NOT NULL,
-    pwdhash bytea
+    pwdhash bytea,
+    refreshedat time with time zone
 );
 
 
@@ -227,6 +247,26 @@ CREATE TABLE auth.user_spotify (
 
 
 ALTER TABLE auth.user_spotify OWNER TO postgres;
+
+--
+-- Name: plays; Type: TABLE; Schema: public; Owner: postgres
+--
+
+CREATE TABLE public.plays (
+    userid uuid NOT NULL,
+    spotifyid character varying NOT NULL,
+    at timestamp with time zone NOT NULL
+);
+
+
+ALTER TABLE public.plays OWNER TO postgres;
+
+--
+-- Name: TABLE plays; Type: COMMENT; Schema: public; Owner: postgres
+--
+
+COMMENT ON TABLE public.plays IS 'Stores all individual plays by musicdash users. One recorded play per row.';
+
 
 --
 -- Name: album; Type: TABLE; Schema: spotify; Owner: postgres
@@ -502,6 +542,14 @@ ALTER TABLE ONLY auth.user_spotify
 
 
 --
+-- Name: plays plays_user_fk; Type: FK CONSTRAINT; Schema: public; Owner: postgres
+--
+
+ALTER TABLE ONLY public.plays
+    ADD CONSTRAINT plays_user_fk FOREIGN KEY (userid) REFERENCES auth."user"(id);
+
+
+--
 -- Name: album_artist album_artist_fk; Type: FK CONSTRAINT; Schema: spotify; Owner: postgres
 --
 
@@ -539,6 +587,13 @@ ALTER TABLE ONLY spotify.track_artist
 
 ALTER TABLE ONLY spotify.track_artist
     ADD CONSTRAINT track_artist_fk_1 FOREIGN KEY (spotifyidartist) REFERENCES spotify.artist(spotifyid);
+
+
+--
+-- Name: SCHEMA public; Type: ACL; Schema: -; Owner: postgres
+--
+
+REVOKE USAGE ON SCHEMA public FROM PUBLIC;
 
 
 --
