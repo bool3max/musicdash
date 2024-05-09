@@ -84,7 +84,6 @@ func (user *User) GetRecentPlaysFromDB(limit int, spotifyProvider music.Resource
 
 		// track not in database, get it from Spotify
 		if err == ErrResourceNotPreserved {
-			log.Println("NOT IN DB, GETTING FROM SPOTIFY")
 			track, err := spotifyProvider.GetTrackById(spotifyId)
 			if err != nil {
 				return spotify.Play{}, err
