@@ -42,6 +42,106 @@ type UserProfileImage struct {
 	UploadedAt    time.Time
 }
 
+// Get the last N plays made by the corresponding user, order by most recent play first.
+// An alternative Spotify ResourceProvider must be passed in to handle cases where a track
+// isn't preserved in the database.
+func (user *User) GetRecentPlaysFromDB(limit int, spotifyProvider music.ResourceProvider) ([]spotify.Play, error) {
+	rows, err := Acquire().pool.Query(
+		context.Background(),
+		`
+			select spotifyid, at
+			from public.plays
+			where userid=$1
+			order by at desc
+			limit $2
+		`,
+		user.Id,
+		limit,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	plays, err := pgx.CollectRows[spotify.Play](rows, func(row pgx.CollectableRow) (spotify.Play, error) {
+		var spotifyId string
+		var at time.Time
+
+		if err := row.Scan(&spotifyId, &at); err != nil {
+			return spotify.Play{}, err
+		}
+
+		// attempt to get track data from local database
+		track, err := Acquire().GetTrackById(spotifyId)
+
+		// found track preserved in database
+		if err == nil {
+			return spotify.Play{
+				At:    at,
+				Track: *track,
+			}, nil
+		}
+
+		// track not in database, get it from Spotify
+		if err == ErrResourceNotPreserved {
+			log.Println("NOT IN DB, GETTING FROM SPOTIFY")
+			track, err := spotifyProvider.GetTrackById(spotifyId)
+			if err != nil {
+				return spotify.Play{}, err
+			}
+
+			return spotify.Play{
+				Track: *track,
+				At:    at,
+			}, nil
+		}
+
+		// other error?
+		return spotify.Play{}, err
+	})
+
+	return plays, nil
+}
+
+// Return a slice of registered users who have a linked Spotify client. User.Spotify clients
+// are not initialized.
+func (db *Db) GetUsersWithSpotifyLinked() ([]User, error) {
+	users := make([]User, 0)
+
+	rows, err := db.pool.Query(
+		context.Background(),
+		`
+			select id, username, registered_at, email
+			from auth.user_spotify	
+				inner join auth.user on auth.user.id=auth.user_spotify.userid
+		`,
+	)
+
+	if err != nil {
+		return nil, err
+	}
+
+	var (
+		id           uuid.UUID
+		username     string
+		email        string
+		registeredAt time.Time
+	)
+
+	pgx.ForEachRow(rows, []any{&id, &username, &registeredAt, &email}, func() error {
+		users = append(users, User{
+			Username:     username,
+			Email:        email,
+			RegisteredAt: registeredAt,
+			Id:           id,
+		})
+
+		return nil
+	})
+
+	return users, nil
+}
+
 // Set the user's profile image. All profile images must first be converted to webp format and sanitized.
 // This method performs no such checks, I do them in the http handler.
 // It sets the "size" column based on the length of the provided binary data of the image.
@@ -518,6 +618,7 @@ func (db *Db) GetUserProfileImage(ctx context.Context, userId uuid.UUID) (UserPr
 
 // Unconditionally save all plays in the "plays" slice to the database and
 // associate them with the given user.
+// TODO: do these inserts in a transaction!!
 func (user *User) SavePlays(plays []spotify.Play) error {
 	db := Acquire()
 
