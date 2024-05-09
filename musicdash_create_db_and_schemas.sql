@@ -205,7 +205,7 @@ CREATE TABLE auth."user" (
     registered_at timestamp without time zone DEFAULT CURRENT_TIMESTAMP NOT NULL,
     email public.citext NOT NULL,
     pwdhash bytea,
-    refreshedat time with time zone
+    refreshedat timestamp with time zone
 );
 
 
