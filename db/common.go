@@ -30,8 +30,7 @@ func Acquire() *Db {
 	if dbInstance == nil {
 		pool, err := pgxpool.New(context.TODO(), MUSICDASH_DATABASE_URL)
 		if err != nil {
-			fmt.Fprintln(os.Stderr, "error acquiring database pgxpool connection: ", err)
-			os.Exit(1)
+			panic(fmt.Errorf("failed acquiring database pgxpool connection: %w", err))
 		}
 
 		dbInstance = &Db{pool}
