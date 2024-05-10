@@ -343,6 +343,10 @@ func (db *Db) GetAlbumByMatch(iden string) (*music.Album, error) {
 	err := row.Scan(&spotifyId)
 
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrResourceNotPreserved
+		}
+
 		return nil, err
 	}
 
@@ -367,6 +371,9 @@ func (db *Db) GetArtistByMatch(iden string, discogFillLevel int, albumTypes []mu
 	err := row.Scan(&spotifyId)
 
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrResourceNotPreserved
+		}
 		return nil, err
 	}
 
@@ -391,6 +398,10 @@ func (db *Db) GetTrackByMatch(iden string) (*music.Track, error) {
 	err := row.Scan(&spotifyId)
 
 	if err != nil {
+		if err == pgx.ErrNoRows {
+			return nil, ErrResourceNotPreserved
+		}
+
 		return nil, err
 	}
 
