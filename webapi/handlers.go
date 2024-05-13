@@ -100,7 +100,7 @@ func HandlerSignupCred(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		var data SignupCredRequestData
 		if err := c.ShouldBindJSON(&data); err != nil {
-			c.JSON(http.StatusBadRequest, responseBadRequest)
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
 			return
 		}
 
@@ -660,5 +660,62 @@ func HandlerGetUserProfileImage(database *db.Db) gin.HandlerFunc {
 
 		// images are always stored in webp format
 		c.Data(http.StatusOK, "image/webp", profileImage.Data)
+	}
+}
+
+// Change the username of the currently logged in account. The new username is checked
+// for validity and availability.
+func HandlerUpdateUsername(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := c.MustGet("current_user").(*db.User)
+
+		var requestData struct {
+			Username string `binding:"required"`
+		}
+
+		// incorrect request json payload
+		if err := c.ShouldBindJSON(&requestData); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+			return
+		}
+
+		// trim spaces from username
+		requestData.Username = strings.TrimSpace(requestData.Username)
+
+		if !UsernameIsValid(requestData.Username) {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"ERROR": "INVALID_USERNAME"})
+			return
+		}
+
+		isRegistered, err := database.UsernameIsRegistered(c, requestData.Username)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		if isRegistered {
+			// TODO: figure out which http code to return here?
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"ERROR": "USERNAME_REGISTERED"})
+			return
+		}
+
+		// preserve username change in database
+		_, err = database.Pool().Exec(
+			c,
+			`
+				update auth.user
+				set username=$1
+				where id=$2
+			`,
+			requestData.Username,
+			user.Id,
+		)
+
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+			return
+		}
+
+		c.JSON(http.StatusOK, gin.H{"message": "Username successfully updated."})
 	}
 }

@@ -62,6 +62,11 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 				SpotifyAuthNeeded(database),
 				HandlerUploadProfileImageFromSpotify(database),
 			)
+
+			groupAccount.POST(
+				"/update-username",
+				HandlerUpdateUsername(database),
+			)
 		}
 
 		// groupSpotify := api.Group("/spotify")
