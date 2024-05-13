@@ -693,9 +693,10 @@ func HandlerUpdateUsername(database *db.Db) gin.HandlerFunc {
 			return
 		}
 
+		// precautionary measure so we can display an appropriate error message
+		// actual sql "uodate" statement would fail regardless
 		if isRegistered {
-			// TODO: figure out which http code to return here?
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"ERROR": "USERNAME_REGISTERED"})
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"ERROR": "USERNAME_REGISTERED"})
 			return
 		}
 
