@@ -23,9 +23,5 @@ func UsernameIsValid(username string) bool {
 		}
 	}
 
-	if !hasAscii {
-		return false
-	}
-
-	return regexp.MustCompile(`^([a-z]|[A-Z]|[0-9]|_){3,30}$`).MatchString(username)
+	return hasAscii && regexp.MustCompile(`^([a-z]|[A-Z]|[0-9]|_){3,30}$`).MatchString(username)
 }
