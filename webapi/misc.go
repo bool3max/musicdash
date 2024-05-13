@@ -13,5 +13,19 @@ func AppendSpotifyBase64AuthCredentialsRequest(req *http.Request, client_id, cli
 
 // ASCII-only, letters + digits + underscores, in length range [3,30]
 func UsernameIsValid(username string) bool {
+
+	// make sure that username has at least one ascii letter
+	hasAscii := false
+	for _, curByte := range []byte(username) {
+		if (curByte >= 65 && curByte <= 90) || (curByte >= 97 && curByte <= 122) {
+			hasAscii = true
+			break
+		}
+	}
+
+	if !hasAscii {
+		return false
+	}
+
 	return regexp.MustCompile(`^([a-z]|[A-Z]|[0-9]|_){3,30}$`).MatchString(username)
 }
