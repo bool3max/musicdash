@@ -140,6 +140,20 @@ type Track struct {
 //     , properly marking the main performing artist, and preserving
 //     any performing artists that aren't already in the database
 func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bool) error {
+	// preserve the track's belonging album if it isn't already so
+	if track.Album.SpotifyId != "" {
+		albumIsPreserved, err := track.Album.IsPreserved(ctx, pool)
+		if err != nil {
+			return err
+		}
+
+		if !albumIsPreserved {
+			if err = track.Album.Preserve(ctx, pool, recurse); err != nil {
+				return err
+			}
+		}
+	}
+
 	sqlQueryBaseInfo := `
 		insert into spotify.track
 		(spotifyid, title, duration, tracklistnum, discnum, explicit, popularity, spotifyuri, isrc, ean, upc, spotifyidalbum)	
@@ -208,20 +222,6 @@ func (track *Track) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 
 		if err != nil {
 			return err
-		}
-	}
-
-	// preserve the track's belonging album if it isn't already so
-	if track.Album.SpotifyId != "" {
-		albumIsPreserved, err := track.Album.IsPreserved(ctx, pool)
-		if err != nil {
-			return err
-		}
-
-		if !albumIsPreserved {
-			if err = track.Album.Preserve(ctx, pool, recurse); err != nil {
-				return err
-			}
 		}
 	}
 
