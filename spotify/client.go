@@ -240,6 +240,9 @@ func (client *Client) Refresh() (bool, error) {
 		}
 
 		client.AccessToken = response.Access_token
+
+		// a new refresh token isn't always provided back
+		// in case it is, save it to the client
 		if response.Refresh_token != "" {
 			client.RefreshToken = response.Refresh_token
 		}
@@ -660,4 +663,38 @@ func (spot *Client) GetRecentlyPlayedTracks(limit int) ([]Play, error) {
 	}
 
 	return convertedPlays, nil
+}
+
+// Add an item (denoted by its URI) to the user's Spotify queue
+func (spot *Client) QueueItem(uri string) error {
+	if spot.flowType != AuthorizationCode {
+		return ErrInvalidAuthFlowForRequest
+	}
+
+	finalUrl := "https://api.spotify.com/v1/me/player/queue?" + url.Values{"uri": {uri}}.Encode()
+
+	req, err := http.NewRequest("POST", finalUrl, nil)
+
+	// error constructing request
+	if err != nil {
+		return err
+	}
+
+	req.Header.Add("Authorization", "Bearer "+spot.AccessToken)
+
+	response, err := http.DefaultClient.Do(req)
+
+	// error performing request
+	if err != nil {
+		return err
+	}
+
+	defer response.Body.Close()
+
+	// TODO decode response JSON and extract the message from its "error" object
+	if response.StatusCode != 204 {
+		return fmt.Errorf("error queueing: status code: %d", response.StatusCode)
+	}
+
+	return nil
 }
