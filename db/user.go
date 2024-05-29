@@ -167,7 +167,8 @@ func (user *User) SetProfileImage(ctx context.Context, width, height int, data [
 	return err
 }
 
-// Establish a user.Spotify client using authentication parameters from the database
+// Attach a new, refreshed spotify.Client instance to user.Spotify using authentication parameters from the database.
+// Saves potentially new auth. parameters to the database.
 func (user *User) GetSpotifyAuth(ctx context.Context) error {
 	var accessToken, refreshToken string
 	var expiresAt time.Time
