@@ -400,6 +400,16 @@ func (spot *Client) GetAlbumById(id string) (*music.Album, error) {
 
 	dbAlbum := album.toDB()
 
+	// hack - save a simple copy of the album to each of its tracks
+	// this is necessary because preserving an album with recurse=true attempts to preserve
+	// its tracks, and preserving an individual track requires it to have an associated
+	// album id, which is saved in music.Track.Album.SpotifyId
+	for trackIdx := range dbAlbum.Tracks {
+		dbAlbum.Tracks[trackIdx].Album = music.Album{
+			SpotifyId: dbAlbum.SpotifyId,
+		}
+	}
+
 	return &dbAlbum, nil
 }
 
