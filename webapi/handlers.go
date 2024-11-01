@@ -2,6 +2,7 @@ package webapi
 
 import (
 	"bool3max/musicdash/db"
+	"bool3max/musicdash/music"
 	"bool3max/musicdash/spotify"
 	"io"
 	"log"
@@ -41,8 +42,8 @@ var (
 
 // Returns a Gin handler middleware that ensures that the user is logged-in into a valid
 // session. If the user isn't logged in or the token is invalid, this middleware aborts the
-// handler chain (if that's the right term for it?). Otherwise it saves the current logged in user
-// as into the gin context.
+// handler chain. Otherwise it saves the current logged in user
+// into the gin context.
 func AuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authToken, err := c.Cookie("auth_token")
@@ -718,5 +719,108 @@ func HandlerUpdateUsername(database *db.Db) gin.HandlerFunc {
 		}
 
 		c.JSON(http.StatusOK, gin.H{"message": "Username successfully updated."})
+	}
+}
+
+func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		user := c.MustGet("current_user").(*db.User)
+
+		requestedResourceType := c.Param("resourceType")
+		requestedResourceId := c.Param("resourceId")
+		requestedCount := c.Query("count")
+
+		// number of tracks from resource to queue
+		var count int
+
+		if requestedCount != "" {
+			// TODO error check this
+			count, _ = strconv.Atoi(requestedCount)
+		} else {
+			count = 4
+		}
+
+		var remixProtection = false
+		if c.Query("remix-protection") != "" {
+			remixProtection = true
+		}
+
+		queuedURIs := []string{}
+
+		switch requestedResourceType {
+		case "album":
+			album, err := user.Spotify.GetAlbumById(requestedResourceId)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+				return
+			}
+
+			for count > 0 {
+				// get random track from slice that isn't already queued
+				randTrack := album.Tracks[rand.Intn(album.CountTracks)]
+				for slices.Contains(queuedURIs, randTrack.SpotifyURI) {
+					randTrack = album.Tracks[rand.Intn(album.CountTracks)]
+				}
+
+				if remixProtection {
+					for strings.Contains(strings.ToLower(randTrack.Title), "remix") {
+						randTrack = album.Tracks[rand.Intn(album.CountTracks)]
+					}
+				}
+
+				queuedURIs = append(queuedURIs, randTrack.SpotifyURI)
+
+				if err := user.Spotify.QueueItem(randTrack.SpotifyURI); err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+					return
+				}
+				count -= 1
+			}
+
+		case "artist":
+			// get entire discography of artist
+			dummyArtist := music.Artist{SpotifyId: requestedResourceId}
+			discog, err := user.Spotify.GetArtistDiscography(&dummyArtist, nil)
+
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+				return
+			}
+
+			// flatten all tracks from discog.
+			allTracks := []music.Track{}
+			for _, album := range discog {
+				allTracks = append(allTracks, album.Tracks...)
+			}
+
+			for count > 0 {
+				// get random track from slice that isn't already queued
+				randTrack := allTracks[rand.Intn(len(allTracks))]
+				for slices.Contains(queuedURIs, randTrack.SpotifyURI) {
+					randTrack = allTracks[rand.Intn(len(allTracks))]
+				}
+
+				if remixProtection {
+					for strings.Contains(strings.ToLower(randTrack.Title), "remix") {
+						randTrack = allTracks[rand.Intn(len(allTracks))]
+					}
+				}
+
+				if err := user.Spotify.QueueItem(randTrack.SpotifyURI); err != nil {
+					c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
+					return
+				}
+
+				queuedURIs = append(queuedURIs, randTrack.SpotifyURI)
+				count -= 1
+			}
+
+		case "playlist":
+			c.AbortWithStatusJSON(http.StatusNotImplemented, gin.H{"error": "ERROR_NOT_IMPLEMENTED"})
+		default:
+			c.AbortWithStatusJSON(http.StatusBadRequest, responseBadRequest)
+		}
+
+		c.JSON(http.StatusCreated, queuedURIs)
 	}
 }

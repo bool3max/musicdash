@@ -69,7 +69,14 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			)
 		}
 
-		// groupSpotify := api.Group("/spotify")
+		groupSpotify := api.Group("/spotify", AuthNeeded(database), SpotifyAuthNeeded(database))
+		{
+			// resourceType must be one of: album, playlist, artist. resourceId must be a valid id
+			// for a resource of the corresponding resourceType
+			// an optional URL parameter "count" may be supplied
+			// the handler responds with a JSON-encoded array of URIs of all successfully queued tracks
+			groupSpotify.POST("/random-queuer/:resourceType/:resourceId", HandlerRandomQueuer(database))
+		}
 
 		api.GET("/user/:userid/profile-image", HandlerGetUserProfileImage(database))
 	}
