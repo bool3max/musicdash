@@ -14,7 +14,7 @@ import (
 	"time"
 )
 
-const maxIdsGetSeveralAlbums = 20
+const API_MAX_PER_REQUEST_ALBUM = 20
 
 const (
 	endpointTrack  = "https://api.spotify.com/v1/tracks/"
@@ -59,7 +59,7 @@ type Client struct {
 	// the refresh token used to obtain new access tokens once they expire (only valid for AuthorizationCode, otherwise "")
 	RefreshToken string
 
-	// available scopes (only when using AuthorizationCode auth flow, otherwise empty string)
+	// available scopes (only when using AuthorizationCode auth flow, otherwise "")
 	Scope string
 }
 
@@ -76,7 +76,7 @@ func NewClientCredentials(client_id, client_secret string) (*Client, error) {
 	}
 
 	// for the client credentials auth flow obtaining a new access token is the same process
-	// as refreshing it, so we use that same method when constructing a new client
+	// as refreshing it, so we use that same method when first constructing a new client
 
 	_, err := newClient.Refresh()
 	if err != nil {
@@ -416,15 +416,15 @@ func (spot *Client) GetAlbumById(id string) (*music.Album, error) {
 func (spot *Client) GetSeveralAlbumsById(ids []string) ([]music.Album, error) {
 	// if number of ids requested is more than allowed by api, split slice into
 	// chunks of max allowed size
-	if len(ids) > maxIdsGetSeveralAlbums {
+	if len(ids) > API_MAX_PER_REQUEST_ALBUM {
 		all := make([]music.Album, 0, len(ids))
-		for startIdx := 0; startIdx < len(ids); startIdx += maxIdsGetSeveralAlbums {
+		for startIdx := 0; startIdx < len(ids); startIdx += API_MAX_PER_REQUEST_ALBUM {
 			var idsRange []string
 
-			if startIdx+maxIdsGetSeveralAlbums > len(ids) {
+			if startIdx+API_MAX_PER_REQUEST_ALBUM > len(ids) {
 				idsRange = ids[startIdx:]
 			} else {
-				idsRange = ids[startIdx : startIdx+maxIdsGetSeveralAlbums]
+				idsRange = ids[startIdx : startIdx+API_MAX_PER_REQUEST_ALBUM]
 			}
 
 			batch, err := spot.GetSeveralAlbumsById(idsRange)
@@ -675,7 +675,7 @@ func (spot *Client) GetRecentlyPlayedTracks(limit int) ([]Play, error) {
 	return convertedPlays, nil
 }
 
-// Add an item (denoted by its URI) to the user's Spotify queue
+// Add an item (denoted by its spotify URI) to the user's Spotify queue
 func (spot *Client) QueueItem(uri string) error {
 	if spot.flowType != AuthorizationCode {
 		return ErrInvalidAuthFlowForRequest
@@ -700,11 +700,6 @@ func (spot *Client) QueueItem(uri string) error {
 	}
 
 	defer response.Body.Close()
-
-	// TODO decode response JSON and extract the message from its "error" object
-	if response.StatusCode != 204 {
-		return fmt.Errorf("error queueing: status code: %d", response.StatusCode)
-	}
 
 	return nil
 }

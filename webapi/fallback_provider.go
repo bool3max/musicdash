@@ -180,6 +180,7 @@ func (fp *FallbackProvider) GetAlbumByMatch(match string) (*music.Album, error) 
 
 	// resource not in db
 	if err == db.ErrResourceNotPreserved {
+		log.Println("not found in DB, forwarding request to spotify")
 		album, err := fp.spotify.GetAlbumByMatch(match)
 		if err != nil {
 			return nil, err

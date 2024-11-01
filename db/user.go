@@ -189,6 +189,7 @@ func (user *User) GetSpotifyAuth(ctx context.Context) error {
 			return ErrSpotifyProfileNotLinked
 		}
 
+		// other db error
 		return err
 	}
 
@@ -212,6 +213,7 @@ func (user *User) GetSpotifyAuth(ctx context.Context) error {
 
 	if err = user.SaveSpotifyAuthDB(ctx); err != nil {
 		log.Println("Error preserving Spotify AuthParams to database: ", err)
+		user.Spotify = nil
 		return err
 	}
 

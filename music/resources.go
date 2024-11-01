@@ -5,6 +5,7 @@ package music
 import (
 	"context"
 	"io"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -432,6 +433,7 @@ func (album *Album) Preserve(ctx context.Context, pool *pgxpool.Pool, recurse bo
 			}
 
 			if err = albumTrack.Preserve(ctx, pool, recurse); err != nil {
+				log.Printf("ERROR PRESERVING TRACK (%v): %v\n", albumTrack.Album.SpotifyId, err)
 				return err
 			}
 		}
