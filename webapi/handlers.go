@@ -724,7 +724,7 @@ func HandlerUpdateUsername(database *db.Db) gin.HandlerFunc {
 
 func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 	isRemix := func(title string) bool {
-		protectionKeywords := [...]string{"remix", "bonus", "version"}
+		protectionKeywords := [...]string{"remix", "version"}
 		title = strings.ToLower(title)
 
 		for _, kw := range protectionKeywords {
