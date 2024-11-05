@@ -723,6 +723,19 @@ func HandlerUpdateUsername(database *db.Db) gin.HandlerFunc {
 }
 
 func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
+	isRemix := func(title string) bool {
+		protectionKeywords := [...]string{"remix", "bonus", "version"}
+		title = strings.ToLower(title)
+
+		for _, kw := range protectionKeywords {
+			if strings.Contains(title, kw) {
+				return true
+			}
+		}
+
+		return false
+	}
+
 	return func(c *gin.Context) {
 		user := c.MustGet("current_user").(*db.User)
 
@@ -758,7 +771,7 @@ func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 			for count > 0 {
 				// get random track from slice that isn't already queued
 				randTrack := album.Tracks[rand.Intn(album.CountTracks)]
-				for slices.Contains(queuedURIs, randTrack.SpotifyURI) || (remixProtection && strings.Contains(strings.ToLower((randTrack.Title)), "remix")) {
+				for slices.Contains(queuedURIs, randTrack.SpotifyURI) || (remixProtection && isRemix(randTrack.Title)) {
 					randTrack = album.Tracks[rand.Intn(album.CountTracks)]
 				}
 
@@ -790,7 +803,7 @@ func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 			for count > 0 {
 				// get random track from slice that isn't already queued
 				randTrack := allTracks[rand.Intn(len(allTracks))]
-				for slices.Contains(queuedURIs, randTrack.SpotifyURI) || (remixProtection && strings.Contains(strings.ToLower(randTrack.Title), "remix")) {
+				for slices.Contains(queuedURIs, randTrack.SpotifyURI) || (remixProtection && isRemix(randTrack.Title)) {
 					randTrack = allTracks[rand.Intn(len(allTracks))]
 				}
 
