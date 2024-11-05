@@ -758,14 +758,8 @@ func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 			for count > 0 {
 				// get random track from slice that isn't already queued
 				randTrack := album.Tracks[rand.Intn(album.CountTracks)]
-				for slices.Contains(queuedURIs, randTrack.SpotifyURI) {
+				for slices.Contains(queuedURIs, randTrack.SpotifyURI) || (remixProtection && strings.Contains(strings.ToLower((randTrack.Title)), "remix")) {
 					randTrack = album.Tracks[rand.Intn(album.CountTracks)]
-				}
-
-				if remixProtection {
-					for strings.Contains(strings.ToLower(randTrack.Title), "remix") {
-						randTrack = album.Tracks[rand.Intn(album.CountTracks)]
-					}
 				}
 
 				queuedURIs = append(queuedURIs, randTrack.SpotifyURI)
@@ -796,14 +790,8 @@ func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 			for count > 0 {
 				// get random track from slice that isn't already queued
 				randTrack := allTracks[rand.Intn(len(allTracks))]
-				for slices.Contains(queuedURIs, randTrack.SpotifyURI) {
+				for slices.Contains(queuedURIs, randTrack.SpotifyURI) || (remixProtection && strings.Contains(strings.ToLower(randTrack.Title), "remix")) {
 					randTrack = allTracks[rand.Intn(len(allTracks))]
-				}
-
-				if remixProtection {
-					for strings.Contains(strings.ToLower(randTrack.Title), "remix") {
-						randTrack = allTracks[rand.Intn(len(allTracks))]
-					}
 				}
 
 				if err := user.Spotify.QueueItem(randTrack.SpotifyURI); err != nil {
