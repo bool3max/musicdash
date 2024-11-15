@@ -695,7 +695,7 @@ func HandlerUpdateUsername(database *db.Db) gin.HandlerFunc {
 		}
 
 		// precautionary measure so we can display an appropriate error message
-		// actual sql "uodate" statement would fail regardless
+		// actual sql "update" statement would fail regardless
 		if isRegistered {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"ERROR": "USERNAME_REGISTERED"})
 			return
@@ -744,13 +744,10 @@ func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 		requestedCount := c.Query("count")
 
 		// number of tracks from resource to queue
-		var count int
+		var count int = 4
 
 		if requestedCount != "" {
-			// TODO error check this
 			count, _ = strconv.Atoi(requestedCount)
-		} else {
-			count = 4
 		}
 
 		var remixProtection = false
@@ -786,8 +783,13 @@ func HandlerRandomQueuer(database *db.Db) gin.HandlerFunc {
 
 		case "artist":
 			// get entire discography of artist
+			includeGroups := []music.AlbumType{music.AlbumRegular}
+			if c.Query("include-singles") != "" {
+				includeGroups = append(includeGroups, music.AlbumSingle)
+			}
+
 			dummyArtist := music.Artist{SpotifyId: requestedResourceId}
-			discog, err := user.Spotify.GetArtistDiscography(&dummyArtist, nil)
+			discog, err := user.Spotify.GetArtistDiscography(&dummyArtist, includeGroups)
 
 			if err != nil {
 				c.AbortWithStatusJSON(http.StatusInternalServerError, responseInternalServerError)
