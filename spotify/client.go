@@ -36,6 +36,7 @@ const (
 var (
 	// returned by Client.jsonGetHelper when there is no body in http response to JSON-decode
 	ErrNoBody                    = errors.New("empty body in http response")
+	ErrRateLimited               = errors.New("status 429: rate limited")
 	ErrUserNotPlaying            = errors.New("user not playing anything")
 	ErrInvalidAuthFlowForRequest = errors.New("invalid client authentication flow for request")
 )
@@ -276,6 +277,10 @@ func (client *Client) jsonGetHelper(uri string, decodeTo any) (int, error) {
 
 	defer response.Body.Close()
 
+	if response.StatusCode == 429 {
+		return response.StatusCode, ErrRateLimited
+	}
+
 	// no content in body to decode
 	if response.ContentLength != -1 && response.ContentLength <= 0 {
 		return response.StatusCode, ErrNoBody
@@ -395,7 +400,7 @@ func (spot *Client) GetArtistByMatch(iden string, discogFillLevel int, albumType
 func (spot *Client) GetAlbumById(id string) (*music.Album, error) {
 	var album album
 	if _, err := spot.jsonGetHelper(endpointAlbum+id, &album); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("jsongethelper error: %w", err)
 	}
 
 	dbAlbum := album.toDB()
@@ -458,7 +463,7 @@ func (spot *Client) GetSeveralAlbumsById(ids []string) ([]music.Album, error) {
 func (spot *Client) GetAlbumByMatch(iden string) (*music.Album, error) {
 	search, err := spot.Search(iden, 1)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error searching for album: %w", err)
 	}
 
 	firstResultId := search.Albums[0].SpotifyId
