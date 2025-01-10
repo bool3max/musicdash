@@ -25,7 +25,7 @@ type Db struct {
 }
 
 // Return a valid connected instance of the Db database object. This simply returns the global
-// ptr to an existing instance, and instantiates it if already isn't.
+// ptr to an existing instance, but instantiates it if already isn't.
 func Acquire() *Db {
 	if dbInstance == nil {
 		pool, err := pgxpool.New(context.TODO(), MUSICDASH_DATABASE_URL)

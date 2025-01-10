@@ -9,7 +9,7 @@ import (
 )
 
 // A music.ResourceProvider that prefers data from a local database, falling back to Spotify if the requested
-// resource isn't preserved locally. If the "preserveIfNotFound" flag is true, resources not in the dabatase
+// resource isn't preserved locally. If the "preserveIfNotFound" field is true, resources not in the dabatase
 // that were obtained from Spotify will be subsequently preserved in the database.
 type FallbackProvider struct {
 	db      *db.Db
