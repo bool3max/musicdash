@@ -36,7 +36,7 @@ type User struct {
 }
 
 type UserProfileImage struct {
-	Width, height int
+	Width, Height int
 	Data          []byte
 	Size          int
 	UploadedAt    time.Time
@@ -169,17 +169,17 @@ func (user *User) SetProfileImage(ctx context.Context, width, height int, data [
 
 // Attach a new, refreshed spotify.Client instance to user.Spotify using authentication parameters from the database.
 // Saves potentially new auth. parameters to the database.
-func (user *User) GetSpotifyAuth(ctx context.Context) error {
+func (user *User) AttachSpotifyAuth(ctx context.Context) error {
 	var accessToken, refreshToken string
 	var expiresAt time.Time
 
 	err := Acquire().pool.QueryRow(
 		ctx,
 		`
-				select accesstoken, refreshtoken, expiresat
-				from auth.spotify_token
-				where userid=$1
-			`,
+			select accesstoken, refreshtoken, expiresat
+			from auth.spotify_token
+			where userid=$1
+		`,
 		user.Id,
 	).Scan(&accessToken, &refreshToken, &expiresAt)
 
@@ -210,7 +210,6 @@ func (user *User) GetSpotifyAuth(ctx context.Context) error {
 	user.Spotify = userSpotifyClient
 
 	// save potentially-refreshed new spotify auth. params. to database
-
 	if err = user.SaveSpotifyAuthDB(ctx); err != nil {
 		log.Println("Error preserving Spotify AuthParams to database: ", err)
 		user.Spotify = nil
@@ -605,7 +604,7 @@ func (db *Db) GetUserProfileImage(ctx context.Context, userId uuid.UUID) (UserPr
 			where userid=$1
 		`,
 		userId,
-	).Scan(&newProfileImg.Width, &newProfileImg.height, &newProfileImg.Size, &newProfileImg.Data, &newProfileImg.UploadedAt)
+	).Scan(&newProfileImg.Width, &newProfileImg.Height, &newProfileImg.Size, &newProfileImg.Data, &newProfileImg.UploadedAt)
 
 	if err != nil {
 		if err == pgx.ErrNoRows {
@@ -618,7 +617,7 @@ func (db *Db) GetUserProfileImage(ctx context.Context, userId uuid.UUID) (UserPr
 	return newProfileImg, nil
 }
 
-// Unconditionally save all plays in the "plays" slice to the database and
+// Unconditionally preserve all Spotify plays in the "plays" slice to the database and
 // associate them with the given user.
 // TODO: do these inserts in a transaction!!
 func (user *User) SavePlays(plays []spotify.Play) error {
