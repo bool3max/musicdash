@@ -81,7 +81,7 @@ func SpotifyAuthNeeded(database *db.Db) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		user := c.MustGet("current_user").(*db.User)
 
-		err := user.GetSpotifyAuth(c)
+		err := user.AttachSpotifyAuth(c)
 		if err != nil {
 			// User has no Spotify authentication
 			if err == db.ErrSpotifyProfileNotLinked {

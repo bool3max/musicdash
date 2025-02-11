@@ -2,6 +2,7 @@ package webapi
 
 import (
 	"bool3max/musicdash/db"
+	"bool3max/musicdash/spotify"
 	"context"
 	"log"
 	"time"
@@ -39,7 +40,7 @@ func (ag *Aggregator) Run() {
 		for _, user := range users {
 			log.Printf("aggregator: processing user {%v}={%v}\n", user.Username, user.Id.String())
 			// obtain spotify client
-			if err := user.GetSpotifyAuth(context.Background()); err != nil {
+			if err := user.AttachSpotifyAuth(context.Background()); err != nil {
 				log.Printf("error obtaining spotify client for user: {%v}: %v\n", user.Id.String(), err)
 				continue
 			}
@@ -63,6 +64,14 @@ func (ag *Aggregator) Run() {
 
 			log.Printf("last refresh: %+v\n", refreshedAt)
 
+			// get most recent saved play from database
+			playsDb, err := user.GetRecentPlaysFromDB(1, user.Spotify)
+			if err != nil {
+				log.Printf("aggregator: error getting recently played tracks from db for user: {%v}: %v\n", user.Id.String(), err)
+				continue
+			}
+
+			// number of tracks to request from Spotify API (0=api max, i.e. 50)
 			countRequestTracks := 0
 
 			// only ask the API for ask many 30-second songs the user's could've listened to
@@ -71,7 +80,7 @@ func (ag *Aggregator) Run() {
 				countRequestTracks = int(time.Since(refreshedAt).Seconds() / 30)
 			}
 
-			log.Printf("requesting %v tracks from spotify api...\n", countRequestTracks)
+			log.Printf("aggregator: requesting %v tracks from spotify api...\n", countRequestTracks)
 
 			playsNew, err := user.Spotify.GetRecentlyPlayedTracks(countRequestTracks)
 			if err != nil {
@@ -79,55 +88,24 @@ func (ag *Aggregator) Run() {
 				continue
 			}
 
-			// get most recent saved play from database
-			playsOld, err := user.GetRecentPlaysFromDB(1, user.Spotify)
-			if err != nil {
-				log.Printf("error getting recently played tracks from db for user: {%v}: %v\n", user.Id.String(), err)
-				continue
+			var mostRecentDBPlay spotify.Play
+			if len(playsDb) == 0 {
+				// no plays in DB at all, use fake play with really old time as most recent
+				mostRecentDBPlay = spotify.Play{
+					At: time.Unix(0, 0),
+				}
+			} else {
+				mostRecentDBPlay = playsDb[0]
 			}
 
-			// special case - user has no recorded plays at all, save all plays for response
-			if len(playsOld) == 0 {
-				log.Println("user has no plays in db -> saving all plays from response...")
-				if err := user.SavePlays(playsNew); err != nil {
-					log.Printf("error saving new plays for user {%v}: %v\n", user.Id.String(), err)
-				}
+			log.Printf("aggregator: most recent play in db at: %+v\n", mostRecentDBPlay.At)
 
-				// update user's refreshedat..
-				_, err = ag.db.Pool().Exec(
-					context.Background(),
-					`
-					update auth.user
-					set refreshedat=@refreshedAt
-					where userid=@userId	
-				`,
-					pgx.NamedArgs{
-						"refreshedAt": time.Now(),
-						"userId":      user.Id,
-					},
-				)
-
-				if err != nil {
-					log.Printf("error setting refreshed at for current user: %v\n", err)
-					continue
-				}
-
-				continue
-			}
-
-			// otherwise, determine which new plays are never than most recent in db
-			mostRecentDBPlay := playsOld[0]
-			log.Printf("most recent play in db at: %+v\n", mostRecentDBPlay.At)
-			var upperBoundIndex int
+			// start with assumption that all plays from response should be preserved
+			var upperBoundIndex = len(playsNew)
 			for idx, newPlay := range playsNew {
 				if newPlay.At.Before(mostRecentDBPlay.At) || newPlay.At.Equal(mostRecentDBPlay.At) {
 					upperBoundIndex = idx
 					break
-				}
-
-				// last play, still newer than most recent
-				if idx == len(playsNew)-1 {
-					upperBoundIndex = len(playsNew)
 				}
 			}
 
@@ -135,7 +113,7 @@ func (ag *Aggregator) Run() {
 			// recent play recorded in the database
 			log.Printf("saving total of {%v} new plays...\n", len(playsNew[:upperBoundIndex]))
 			if err := user.SavePlays(playsNew[:upperBoundIndex]); err != nil {
-				log.Printf("error saving new plays for user {%v}: %v\n", user.Id.String(), err)
+				log.Printf("aggregator: error saving new plays for user {%v}: %v\n", user.Id.String(), err)
 				continue
 			}
 
@@ -154,11 +132,12 @@ func (ag *Aggregator) Run() {
 			)
 
 			if err != nil {
-				log.Printf("error setting refreshed at for current user: %v\n", err)
+				log.Printf("aggregator: error setting refreshed at for current user: %v\n", err)
 				continue
 			}
 		}
 
-		time.Sleep(5 * time.Minute)
+		//time.Sleep(AGGREGATOR_SLEEP_TIME)
+		time.Sleep(2 * time.Minute)
 	}
 }
