@@ -3,6 +3,9 @@ package webapi
 import (
 	"bool3max/musicdash/db"
 	"bool3max/musicdash/music"
+	"fmt"
+	"log"
+	"net/http"
 
 	"github.com/gin-contrib/static"
 	"github.com/gin-gonic/gin"
@@ -76,6 +79,21 @@ func NewRouter(database *db.Db, spotifyProvider music.ResourceProvider) *gin.Eng
 			// an optional URL parameter "count" may be supplied
 			// the handler responds with a JSON-encoded array of URIs of all successfully queued tracks
 			groupSpotify.POST("/random-queuer/:resourceType/:resourceId", HandlerRandomQueuer(database))
+
+			groupSpotify.GET("/testing/currently-playing", func(c *gin.Context) {
+				user := c.MustGet("current_user").(*db.User)
+				spot := user.Spotify
+
+				current, err := spot.GetCurrentlyPlayingInfo()
+				if err != nil {
+					log.Println(err)
+					c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"ERROR": "oops"})
+				}
+
+				fmt.Printf("trackId:%v\ntrackName:%v\nalbumName:%v\n", current.Track.SpotifyId, current.Track.Title, current.Track.Album.Title)
+
+				c.Status(200)
+			})
 		}
 
 		api.GET("/user/:userid/profile-image", HandlerGetUserProfileImage(database))
